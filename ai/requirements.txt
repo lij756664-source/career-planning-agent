@@ -16,7 +16,9 @@ openai==2.16.0
 dashscope==1.25.12
 ollama==0.6.1
 sentence-transformers==5.2.3
-hnswlib==0.8.0
+# hnswlib 需要 MSVC 编译 C++ 扩展，未安装时匹配模块自动降级为关键词模式（代码里是可选导入）。
+# 需要向量检索加速时再手动装：pip install hnswlib==0.8.0
+# hnswlib==0.8.0
 rank-bm25==0.2.2
 pdfplumber==0.11.9
 pypdf==6.6.2
