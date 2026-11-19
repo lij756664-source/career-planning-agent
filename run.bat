@@ -75,19 +75,36 @@ popd
 rem ---------------- 2. python env ----------------
 :check_python
 echo.
-if exist "%VENV_PY%" goto :check_deps
+if exist "%VENV_PY%" goto :check_venv_ver
 echo [SETUP] creating virtualenv at ai\venv ...
-py -3.10 -m venv "%AI_DIR%\venv" >nul 2>&1
-if not exist "%VENV_PY%" (
-    echo [WARN] py -3.10 not available, falling back to default python.
-    echo        requirements pin numpy/scikit-learn to 3.10; pip may fail on 3.13+.
-    python -m venv "%AI_DIR%\venv"
+
+rem Locate a real Python 3.10. The py launcher may point at a removed install,
+rem so check common locations before falling back to "python".
+set "PY310="
+if exist "D:\Python310\python.exe" set "PY310=D:\Python310\python.exe"
+if not defined PY310 if exist "C:\Python310\python.exe" set "PY310=C:\Python310\python.exe"
+if not defined PY310 if exist "%LOCALAPPDATA%\Programs\Python\Python310\python.exe" set "PY310=%LOCALAPPDATA%\Programs\Python\Python310\python.exe"
+
+if defined PY310 (
+    echo        using %PY310%
+    "%PY310%" -m venv "%AI_DIR%\venv"
+) else (
+    py -3.10 -m venv "%AI_DIR%\venv" >nul 2>&1
 )
+
 if not exist "%VENV_PY%" (
-    echo [FAIL] cannot create venv. Install Python 3.10 and run again.
+    echo [FAIL] Python 3.10 not found.
+    echo        Install Python 3.10, or create the venv manually:
+    echo          python -m venv ai\venv
     goto :end
 )
 echo [ OK ] venv created
+
+:check_venv_ver
+"%VENV_PY%" -c "import sys; sys.exit(0 if sys.version_info[:2] == (3, 10) else 1)" >nul 2>&1
+if not errorlevel 1 goto :check_deps
+echo [WARN] ai\venv is not Python 3.10. requirements are pinned for 3.10 and
+echo        pip may fail on newer versions. If it does, delete ai\venv and rerun.
 
 :check_deps
 "%VENV_PY%" -c "import flask, flask_socketio, langchain_openai" >nul 2>&1
