@@ -7,8 +7,9 @@ spring:
       max-request-size: 20MB
   datasource:
     url: jdbc:mysql://127.0.0.1:3306/gradquest?useSSL=false&serverTimezone=Asia/Shanghai&useUnicode=true&characterEncoding=utf8
-    username: gradquest
-    password: Gradquest123!
+    username: ${DB_USERNAME:gradquest}
+    # 默认值保持与 database.sql 一致；部署时可用环境变量 DB_PASSWORD 覆盖，避免改代码
+    password: "${DB_PASSWORD:Gradquest123!}"
     driver-class-name: com.mysql.cj.jdbc.Driver
   jackson:
     property-naming-strategy: SNAKE_CASE

@@ -25,6 +25,14 @@ echo ==========================================================
 echo   Project: %ROOT%
 echo.
 
+rem ---------------- 0. local overrides ----------------
+rem local.env is git-ignored; it can hold MYSQL_ROOT_PASSWORD and DB_PASSWORD.
+if exist "%ROOT%local.env" (
+    for /f "usebackq tokens=1,* delims==" %%A in (`findstr /v /b "#" "%ROOT%local.env"`) do (
+        if not "%%A"=="" set "%%A=%%B"
+    )
+)
+
 rem ---------------- 1. database ----------------
 if not exist "%MYSQL_EXE%" (
     where mysql >nul 2>&1
@@ -46,7 +54,11 @@ echo        One-time setup:
 echo          "%MYSQL_EXE%" -u root -p ^< database.sql
 echo.
 set "ROOTPW="
-set /p ROOTPW=MySQL root password (Enter = skip and continue): 
+if defined MYSQL_ROOT_PASSWORD (
+    set "ROOTPW=%MYSQL_ROOT_PASSWORD%"
+    echo [ OK ] using root password from local.env
+)
+if "%ROOTPW%"=="" set /p ROOTPW=MySQL root password (Enter = skip and continue): 
 if "%ROOTPW%"=="" goto :check_python
 pushd "%ROOT%"
 "%MYSQL_EXE%" -u root -p%ROOTPW% < database.sql
