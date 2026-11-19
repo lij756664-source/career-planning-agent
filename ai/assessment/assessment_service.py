@@ -1,0 +1,917 @@
+"""
+职业测评模块 - 服务层
+对应 API 文档第 3 章
+包含AI核心算法:
+1. 动态问卷生成
+2. 多维度计分算法(霍兰德/MBTI/能力/价值观)
+3. AI综合报告生成
+"""
+
+import json
+import os
+import threading
+import random
+from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeoutError
+from datetime import datetime
+from typing import Dict, List, Optional
+from utils.logger_handler import logger
+from assessment.question_bank_vector_store import QuestionBankVectorStore
+from assessment.scoring_rules import get_personality_option_score, get_ability_scale_score
+
+
+# ===== 辅助函数 =====
+
+def _load_assessment_config() -> dict:
+    """加载assessment配置"""
+    import yaml
+    from utils.path_tool import get_abs_path
+    path = get_abs_path("config/assessment.yml")
+    with open(path, "r", encoding="utf-8") as f:
+        return yaml.load(f, Loader=yaml.FullLoader)
+
+
+def _load_prompt(prompt_key: str) -> str:
+    """从prompts.yml加载指定prompt模板"""
+    from utils.config_handler import prompts_conf
+    from utils.path_tool import get_abs_path
+    prompt_path = prompts_conf.get(prompt_key)
+    if not prompt_path:
+        raise ValueError(f"Prompt key '{prompt_key}' not found in prompts.yml")
+    abs_path = get_abs_path(prompt_path)
+    with open(abs_path, "r", encoding="utf-8") as f:
+        return f.read()
+
+
+def _ensure_data_dir():
+    """确保数据目录存在"""
+    from utils.path_tool import get_abs_path
+    data_dir = get_abs_path("data/assessment")
+    os.makedirs(data_dir, exist_ok=True)
+
+
+def _load_store(store_path_key: str) -> dict:
+    """加载JSON存储文件"""
+    _ensure_data_dir()
+    from utils.path_tool import get_abs_path
+    config = _load_assessment_config()
+    path = get_abs_path(config[store_path_key])
+    if os.path.exists(path):
+        with open(path, "r", encoding="utf-8") as f:
+            return json.load(f)
+    return {}
+
+
+def _save_store(store_path_key: str, data: dict):
+    """保存JSON存储文件"""
+    _ensure_data_dir()
+    from utils.path_tool import get_abs_path
+    config = _load_assessment_config()
+    path = get_abs_path(config[store_path_key])
+    with open(path, "w", encoding="utf-8") as f:
+        json.dump(data, f, ensure_ascii=False, indent=2)
+
+
+def _extract_json(raw_text: str) -> dict:
+    """从模型输出中提取JSON（兼容markdown包裹）"""
+    text = raw_text.strip()
+    # 移除markdown代码块标记
+    if text.startswith("```json"):
+        text = text[7:]
+    if text.startswith("```"):
+        text = text[3:]
+    if text.endswith("```"):
+        text = text[:-3]
+    text = text.strip()
+    return json.loads(text)
+
+
+def _ensure_question_options(q: dict) -> dict:
+    """确保题目有 options 供前端渲染。量表题若只有 labels 则转为 options。"""
+    if not q or not isinstance(q, dict):
+        return q
+    opts = q.get("options")
+    if opts and isinstance(opts, list) and len(opts) > 0:
+        return q
+    labels = q.get("labels")
+    if isinstance(labels, list) and len(labels) > 0 and q.get("question_type") == "scale":
+        q = dict(q)
+        q["options"] = [
+            {"option_id": str(i + 1), "option_text": labels[i], "score": i + 1}
+            for i in range(len(labels))
+        ]
+    return q
+
+
+# ===== 核心服务类 =====
+
+class AssessmentService:
+    """职业测评服务：问卷生成 + AI计分 + 报告生成"""
+
+    def __init__(self):
+        self.config = _load_assessment_config()
+        self.questionnaires = _load_store("questionnaire_store_path")
+        self.answers = _load_store("answers_store_path")
+        self.reports = _load_store("reports_store_path")
+        self.tasks = _load_store("report_tasks_store_path")
+        # 题库向量数据库（RAG检索）
+        self.question_bank = QuestionBankVectorStore()
+        # 确保题库已加载
+        try:
+            self.question_bank.load_questions()
+        except Exception as e:
+            logger.warning(f"[Assessment] 题库加载异常: {e}")
+
+    # ==================================================
+    # 3.1 获取测评问卷
+    # ==================================================
+    def get_questionnaire(self, user_id: int, assessment_type: str) -> dict:
+        """
+        生成/获取职业测评问卷。
+        assessment_type: comprehensive(综合) / quick(快速)
+        对应 API 文档 3.1
+        """
+        ts = datetime.now().strftime("%Y%m%d%H%M%S%f")[:-3]
+        assessment_id = f"assess_{ts}_{user_id}"
+
+        # 检查类型合法性
+        type_config = self.config["assessment_types"].get(assessment_type)
+        if not type_config:
+            raise ValueError(f"Invalid assessment_type: {assessment_type}")
+
+        # 生成问卷（调用问卷生成算法，每维度 5 题）
+        dimensions_data = self._generate_questions(assessment_type)
+        total = sum(len(d.get("questions", [])) for d in dimensions_data)
+
+        questionnaire = {
+            "assessment_id": assessment_id,
+            "user_id": user_id,
+            "assessment_type": assessment_type,
+            "total_questions": total,
+            "estimated_time": min(10, max(5, total // 2)),  # 约 5–10 分钟
+            "dimensions": dimensions_data,
+            "created_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        }
+
+        # 持久化
+        self.questionnaires[assessment_id] = questionnaire
+        _save_store("questionnaire_store_path", self.questionnaires)
+
+        logger.info(f"[Assessment] 生成问卷 assessment_id={assessment_id}, type={assessment_type}")
+        return questionnaire
+
+    def _generate_questions(self, assessment_type: str) -> List[dict]:
+        """
+        问卷生成算法：从题库向量数据库检索题目（RAG方式）。
+        每个维度固定 5 题，共 20 题。
+        为了让每次测评看到的题目组合有所不同，这里会按维度随机抽题。
+        """
+        # 每个维度均 5 题
+        QUESTIONS_PER_DIMENSION = 5
+        dim_configs = {
+            "interest": {"dimension_id": "interest", "dimension_name": "职业兴趣", "count": QUESTIONS_PER_DIMENSION},
+            "personality": {"dimension_id": "personality", "dimension_name": "性格特质", "count": QUESTIONS_PER_DIMENSION},
+            "ability": {"dimension_id": "ability", "dimension_name": "能力倾向", "count": QUESTIONS_PER_DIMENSION},
+            "values": {"dimension_id": "values", "dimension_name": "职业价值观", "count": QUESTIONS_PER_DIMENSION},
+        }
+        dimensions = []
+
+        for dim_id, dim_cfg in dim_configs.items():
+            questions: List[dict] = []
+            try:
+                # 一次多取一些题，再随机抽取目标数量，保证每次问卷题目组合不同
+                retrieve_count = dim_cfg["count"] * 3
+                raw_questions = self.question_bank.retrieve_by_dimension(
+                    dimension_id=dim_id,
+                    count=retrieve_count
+                )
+                # 确保每题都有 options（量表题从 labels 转为 options）
+                raw_questions = [_ensure_question_options(q) for q in raw_questions]
+
+                # 随机打乱并截取前 N 题；若题库不足则全部使用
+                questions = list(raw_questions) if raw_questions else []
+                if len(questions) > dim_cfg["count"]:
+                    random.shuffle(questions)
+                    questions = questions[:dim_cfg["count"]]
+                logger.info(f"[Assessment] 从RAG检索 {dim_id} 维度题目: {len(questions)}题")
+            except Exception as e:
+                logger.error(f"[Assessment] 检索 {dim_id} 维度题目失败，尝试使用内置题库: {e}")
+
+            # 若上面检索不到题目（包括异常或题库为空），从内置题库兜底生成题目
+            if not questions:
+                try:
+                    builtin_getter = getattr(self.question_bank, "_get_builtin_questions", None)
+                    if callable(builtin_getter):
+                        bank = builtin_getter()
+                        dim_bank = bank.get(dim_id, {}).get("questions", [])
+                        dim_bank = [_ensure_question_options(q) for q in dim_bank]
+                        questions = list(dim_bank) if dim_bank else []
+                        if len(questions) > dim_cfg["count"]:
+                            random.shuffle(questions)
+                            questions = questions[:dim_cfg["count"]]
+                        logger.info(f"[Assessment] 使用内置题库为 {dim_id} 维度生成 {len(questions)} 题")
+                    else:
+                        logger.warning(f"[Assessment] 未找到内置题库获取方法，维度 {dim_id} 将无题目")
+                except Exception as be:
+                    logger.error(f"[Assessment] 使用内置题库为 {dim_id} 维度生成题目失败: {be}")
+
+            dimensions.append({
+                "dimension_id": dim_id,
+                "dimension_name": dim_cfg["dimension_name"],
+                "questions": questions
+            })
+
+        return dimensions
+
+    # ==================================================
+    # 3.2 提交测评答案（触发AI报告生成）
+    # ==================================================
+    def submit_answers(self, user_id: int, assessment_id: str, answers: List[dict], time_spent: int) -> dict:
+        """
+        提交测评答卷，触发后台AI报告生成。
+        对应 API 文档 3.2
+        """
+        # 校验assessment_id
+        if assessment_id not in self.questionnaires:
+            raise ValueError(f"Invalid assessment_id: {assessment_id}")
+
+        # 生成report_id
+        ts = datetime.now().strftime("%Y%m%d%H%M%S%f")[:-3]
+        report_id = f"report_{ts}_{user_id}"
+
+        # 保存答案
+        answer_record = {
+            "assessment_id": assessment_id,
+            "user_id": user_id,
+            "answers": answers,
+            "time_spent": time_spent,
+            "submitted_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        }
+        self.answers[assessment_id] = answer_record
+        _save_store("answers_store_path", self.answers)
+
+        # 初始化任务状态
+        self.tasks[report_id] = {
+            "status": "processing",
+            "user_id": user_id,
+            "assessment_id": assessment_id,
+            "created_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+            "result": None,
+            "error": None
+        }
+        _save_store("report_tasks_store_path", self.tasks)
+
+        # 后台线程生成报告
+        def _run():
+            try:
+                # 1. 计分
+                scores = self._calculate_scores(assessment_id, answers)
+                # 2. 调用AI生成报告
+                report = self._generate_report_with_ai(user_id, assessment_id, answers, scores)
+                # 2.5 用后端计分覆盖能力分析、兴趣匹配度（保证能力有区分度、兴趣匹配度基于 Holland）
+                report = self._inject_scores_into_report(report, scores)
+                # 2.6 注入计算机相关岗位推荐（适合职业领域 + 最匹配职业，来自数据集 + Holland/MBTI）
+                try:
+                    from assessment.career_recommender import inject_career_recommendations
+                    report = inject_career_recommendations(report)
+                except Exception as inj:
+                    logger.warning("[Assessment] 注入职业推荐失败，保留AI原结果: %s", inj)
+                # 3. 保存报告
+                report["report_id"] = report_id
+                report["user_id"] = user_id
+                report["assessment_date"] = datetime.now().strftime("%Y-%m-%d")
+                report["created_at"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                report["status"] = "completed"
+                self.reports[report_id] = report
+                _save_store("reports_store_path", self.reports)
+
+                self.tasks[report_id]["status"] = "completed"
+                self.tasks[report_id]["result"] = {"report_id": report_id}
+                logger.info(f"[Assessment] 报告生成完成 report_id={report_id}")
+            except Exception as e:
+                self.tasks[report_id]["status"] = "failed"
+                self.tasks[report_id]["error"] = str(e)
+                logger.error(f"[Assessment] 报告生成失败 report_id={report_id}: {e}", exc_info=True)
+            finally:
+                _save_store("report_tasks_store_path", self.tasks)
+
+        thread = threading.Thread(target=_run, daemon=True)
+        thread.start()
+
+        logger.info(f"[Assessment] 答案提交成功，触发报告生成 report_id={report_id}")
+        return {"report_id": report_id, "status": "processing"}
+
+    def _ability_level(self, score: int) -> str:
+        """能力等级：用于报告展示（不影响计分）"""
+        s = int(score) if isinstance(score, (int, float, str)) else 0
+        if s >= 85:
+            return "优秀"
+        if s >= 75:
+            return "良好"
+        if s >= 65:
+            return "一般"
+        return "待提升"
+
+    def _ability_narrative(self, ability: str, score: int) -> dict:
+        """
+        为单项能力生成差异化文案（不依赖大模型，避免报告生成过久与套话）。
+        返回 { description: str, suggestions: [str] }（suggestions 可为空）
+        """
+        name = (ability or "").strip()
+        s = int(score) if isinstance(score, (int, float, str)) else 0
+        band = "high" if s >= 80 else ("mid" if s >= 70 else ("low" if s >= 60 else "very_low"))
+
+        def pack(desc: str, sug: Optional[List[str]] = None):
+            return {"description": desc, "suggestions": [x for x in (sug or []) if x]}
+
+        if "学习" in name:
+            if band == "high":
+                return pack("你能快速吸收新知识并迁移到实际任务中，上手新技术的速度较快，适合在迭代频繁的岗位持续成长。")
+            if band == "mid":
+                return pack("学习节奏稳定，能完成从理解到应用的迁移；若能增加输出与复盘频率，提升会更明显。", [
+                    "每周设定 1 个可交付的小成果（Demo/笔记/复盘），用输出倒逼输入。",
+                    "对新知识点做 3 次复用：练习题→小项目→真实项目改造。"
+                ])
+            return pack("学习过程容易停留在“看懂”，落地与复盘不足会拖慢进步速度。", [
+                "用“目标-拆解-实践-复盘”四步学习法：每次学习必须配 1 个可运行的练习。",
+                "建立错题/踩坑清单，周末统一复盘并补齐知识盲区。"
+            ])
+
+        if "逻辑" in name or "分析" in name:
+            if band == "high":
+                return pack("你擅长把复杂问题拆解为可验证的子问题，能基于数据或事实进行推理与决策，分析质量稳定。")
+            if band == "mid":
+                return pack("具备基本的拆解与归因能力，但在信息不完整场景下的假设验证还可以更系统。", [
+                    "遇到问题先写“问题定义/约束/假设/验证方式”，再开始动手。",
+                    "用 5Why + 复盘模板记录 3 次真实问题的分析过程。"
+                ])
+            return pack("分析容易被表象带偏，缺少结构化拆解会导致定位耗时。", [
+                "练习把问题写成“输入-处理-输出”，并列出 3 个可验证假设。",
+                "对日志/指标做最小闭环：提出假设→验证→结论→行动。"
+            ])
+
+        if "执行" in name:
+            if band == "high":
+                return pack("你能把目标拆解为可落地的行动项，并保持推进节奏，交付可靠，适合承担关键任务的推进角色。")
+            if band == "mid":
+                return pack("能完成任务但节奏波动，容易受优先级切换影响；如果能强化计划与复盘，效率会显著提升。", [
+                    "用看板管理：待办/进行中/已完成，限制“进行中”不超过 2 项。",
+                    "每天只抓 3 件最重要的事，晚上用 5 分钟做复盘。"
+                ])
+            return pack("任务推进缺少里程碑与反馈点，容易出现拖延或返工。", [
+                "把任务拆成 1-2 天可完成的小块，并设定明确验收标准。",
+                "每次交付前做一次自检清单，减少低级返工。"
+            ])
+
+        if "创新" in name:
+            if band == "high":
+                return pack("你愿意尝试新方法并能提出可行方案，在方案对比与取舍上更主动，具备较好的探索与改进意识。")
+            if band == "mid":
+                return pack("有一定改进意识，但更多停留在“想到”，推进到“验证”的频率不够高。", [
+                    "每周做 1 次小实验：提出改进点→设计对照→验证效果→记录结论。",
+                    "用“方案A/方案B/成本/收益/风险”对比表强化取舍能力。"
+                ])
+            return pack("更偏向沿用既有做法，缺少低成本试错，会限制方案质量的上限。", [
+                "从“微创新”开始：每次项目至少提出 1 个流程或工具改进点并落地。",
+                "积累 10 个常用模式（性能优化、抽象复用、自动化脚本），在项目中按需套用。"
+            ])
+
+        if "沟通" in name or "表达" in name:
+            if band == "high":
+                return pack("你能清晰表达观点并对齐目标，沟通中能抓住关键信息，减少误解与返工，协作效率高。")
+            if band == "mid":
+                return pack("沟通基本顺畅，但在“需求澄清/风险预警/共识沉淀”上可以更结构化。", [
+                    "关键沟通用“三段式”：背景-目标-结论/请求，减少来回确认。",
+                    "每次讨论后输出 5 行会议纪要：结论/待办/负责人/截止时间/风险点。"
+                ])
+            return pack("表达不够聚焦，需求理解与反馈闭环不足会影响协作质量。", [
+                "先复述对方需求并确认边界，再给方案；避免“我以为”。",
+                "用模板写反馈：现状/影响/建议/下一步，把信息压缩成可执行项。"
+            ])
+
+        return pack("该项能力目前表现一般，建议结合真实场景持续训练并形成可复用的方法。", [
+            "把能力训练嵌入项目：明确目标→刻意练习→复盘总结→再次应用。"
+        ])
+
+    def _build_ability_detail(self, abilities: dict) -> list:
+        """生成 5 项能力的详细卡片数据（能力名、分数、等级、差异化描述/建议）。"""
+        abilities = abilities or {}
+        order = ["学习能力", "执行能力", "创新能力", "逻辑分析能力", "沟通表达能力"]
+        detail = []
+        for name in order:
+            score = abilities.get(name)
+            if score is None:
+                continue
+            score_i = int(score) if isinstance(score, (int, float, str)) else 0
+            text = self._ability_narrative(name, score_i)
+            detail.append({
+                "ability": name,
+                "score": score_i,
+                "level": self._ability_level(score_i),
+                "description": text.get("description", ""),
+                "suggestions": text.get("suggestions", []),
+            })
+        return detail
+
+    def _calculate_scores(self, assessment_id: str, answers: List[dict]) -> dict:
+        """
+        多维度计分算法：
+        - 霍兰德6类型分数
+        - 5大性格特质分数
+        - 5项能力分数
+        - 5个价值观分数
+        """
+        questionnaire = self.questionnaires[assessment_id]
+        answer_map = {a["question_id"]: a["answer"] for a in answers}
+
+        # 初始化分数
+        holland_scores = {"R": 0, "I": 0, "A": 0, "S": 0, "E": 0, "C": 0}
+        trait_scores = {"外向性": 0, "开放性": 0, "尽责性": 0, "宜人性": 0, "情绪稳定性": 0}
+        ability_scores = {"逻辑分析能力": 0, "学习能力": 0, "沟通表达能力": 0, "执行能力": 0, "创新能力": 0}
+        value_scores = {"成就感": 0, "学习发展": 0, "工作稳定": 0, "薪资待遇": 0, "工作环境": 0}
+
+        # 遍历问卷题目，累加分数
+        for dim in questionnaire["dimensions"]:
+            dim_id = dim["dimension_id"]
+            for q in dim["questions"]:
+                qid = q["question_id"]
+                user_answer = answer_map.get(qid)
+                if not user_answer:
+                    continue
+
+                # 根据题目类型计分（优先使用 scoring_rules 中按题目差异化的规则，避免分数雷同）
+                if q["question_type"] == "single_choice":
+                    options = q.get("options") or []
+                    score = None
+                    if dim_id == "personality":
+                        rule_score = get_personality_option_score(qid, user_answer)
+                        if rule_score is not None:
+                            score = rule_score
+                    if score is None:
+                        for idx, opt in enumerate(options):
+                            if str(opt.get("option_id", "")) == str(user_answer):
+                                score = opt.get("score", 0)
+                                break
+                        if score is None and options and isinstance(user_answer, (int, float)):
+                            idx = int(user_answer)
+                            if 0 <= idx < len(options):
+                                score = options[idx].get("score", 0)
+                    if score is not None:
+                        if dim_id == "interest":
+                            holland_type = q.get("holland_type", "R")
+                            holland_scores[holland_type] += score
+                        elif dim_id == "personality":
+                            trait = q.get("trait", "外向性")
+                            trait_scores[trait] += score
+                            logger.debug(
+                                "[性格计分] qid=%s trait=%s user_answer=%s score=%s",
+                                qid, trait, user_answer, score
+                            )
+                        elif dim_id == "values":
+                            val_type = q.get("value_type", "成就感")
+                            value_scores[val_type] += score
+                    elif dim_id == "personality":
+                        logger.warning(
+                            "[性格计分] 未匹配到选项 qid=%s trait=%s user_answer=%s options=%s",
+                            qid, q.get("trait"), user_answer,
+                            [{"option_id": o.get("option_id"), "score": o.get("score")} for o in options]
+                        )
+
+                elif q["question_type"] == "scale":
+                    scale_score = int(user_answer) if isinstance(user_answer, (int, str)) else 3
+                    scale_score = max(1, min(5, scale_score))
+                    if dim_id == "ability":
+                        ability = q.get("ability", "逻辑分析能力")
+                        rule_score = get_ability_scale_score(qid, scale_score)
+                        if rule_score is not None:
+                            ability_scores[ability] += rule_score
+                        else:
+                            ability_scores[ability] += scale_score * 20
+
+        # 性格特质：差异化规则下每维度原始分约 0–24，线性映射到 20–100（避免 0 分）
+        logger.info("[性格计分] 归一前原始分 trait_scores=%s", dict(trait_scores))
+        trait_raw_max = 24.0  # 4 题 * 每题最高约 6 分
+        for k in trait_scores:
+            raw = trait_scores[k]
+            trait_scores[k] = min(100, max(20, int(20 + (raw / trait_raw_max) * 80)))
+        logger.info("[性格计分] 归一后 trait_scores=%s", dict(trait_scores))
+
+        # 归一化到 0–100
+        for k in holland_scores:
+            holland_scores[k] = min(100, int(holland_scores[k] * 5))  # 假设每类型最多20分原始分
+        for k in value_scores:
+            value_scores[k] = min(100, int(value_scores[k] * 10))
+
+        # 能力分数：非线性加权模型（基础分55，平方拉伸，权重，上限95，整体>80时+3%修正）
+        def calculate_score(similarity: float, weight: float = 1.0) -> int:
+            similarity = max(0.0, min(1.0, float(similarity)))
+            base_score = 55
+            nonlinear = pow(similarity, 1.5)
+            dynamic_score = nonlinear * 40 * weight
+            final_score = base_score + dynamic_score
+            if final_score > 95:
+                final_score = 95
+            return round(final_score)
+
+        ability_weights = {
+            "学习能力": 1.1,
+            "沟通表达能力": 1.0,
+            "创新能力": 1.2,
+            "逻辑分析能力": 1.15,
+            "执行能力": 1.05,
+        }
+        # 能力原始分范围：差异化规则下约 40–290，原 scale*20 下 60–300，统一按 [40, 290] 归一
+        raw_ability = dict(ability_scores)
+        raw_min, raw_span = 40.0, 250.0
+        for k in ability_scores:
+            raw = ability_scores[k]
+            similarity = (raw - raw_min) / raw_span
+            similarity = max(0.0, min(1.0, similarity))
+            w = ability_weights.get(k, 1.0)
+            ability_scores[k] = max(55, calculate_score(similarity, w))
+        avg_ability = sum(ability_scores.values()) / 5 if ability_scores else 0
+        if avg_ability > 80:
+            for k in ability_scores:
+                ability_scores[k] = min(98, round(ability_scores[k] * 1.03))
+                ability_scores[k] = max(55, ability_scores[k])
+        # 若五项能力分数完全相同，按能力名加确定性微调，使展示有区分度（避免“所有分数都一样”）
+        vals = list(ability_scores.values())
+        if len(vals) >= 2 and len(set(vals)) == 1:
+            base = vals[0]
+            offsets = {"逻辑分析能力": -4, "学习能力": -2, "沟通表达能力": 0, "执行能力": 2, "创新能力": 4}
+            for k in ability_scores:
+                ability_scores[k] = max(55, min(98, base + offsets.get(k, 0)))
+        logger.info("[能力计分] 原始分 raw_ability=%s 归一后 abilities=%s", raw_ability, dict(ability_scores))
+
+        return {
+            "holland": holland_scores,
+            "traits": trait_scores,
+            "abilities": ability_scores,
+            "values": value_scores
+        }
+
+    def _infer_mbti_from_traits(self, trait_scores: dict) -> str:
+        """
+        根据五项性格特质分数简易推断 MBTI 四维（E/I, S/N, T/F, J/P），
+        用于 AI 未返回 mbti_type 或本地模板报告时保证报告页有显示。
+        对应关系：外向性→E/I, 开放性→N/S, 宜人性→F/T, 尽责性→J/P。
+        """
+        if not trait_scores:
+            return "INTJ"  # 默认
+        get = lambda name: int(trait_scores.get(name, 50))
+        e_i = "E" if get("外向性") >= 50 else "I"
+        s_n = "N" if get("开放性") >= 50 else "S"
+        t_f = "F" if get("宜人性") >= 50 else "T"
+        j_p = "J" if get("尽责性") >= 50 else "P"
+        return e_i + s_n + t_f + j_p
+
+    def _inject_scores_into_report(self, report: dict, scores: dict) -> dict:
+        """
+        用后端计分结果覆盖报告中的能力分析、兴趣匹配度，保证数据有区分度且基于 Holland 计算。
+        """
+        # 1) 能力分析：按实际能力分数拆成优势(>=75)与待提升(<70)
+        abilities = scores.get("abilities") or {}
+        type_names = {"R": "实用型(R)", "I": "研究型(I)", "A": "艺术型(A)", "S": "社会型(S)", "E": "企业型(E)", "C": "常规型(C)"}
+        strengths = []
+        areas_to_improve = []
+        for name, score in abilities.items():
+            item = {"ability": name, "score": score}
+            if score >= 75:
+                strengths.append({**item, "description": ""})
+            elif score < 70:
+                areas_to_improve.append({**item, "suggestions": []})
+        strengths.sort(key=lambda x: -x["score"])
+        areas_to_improve.sort(key=lambda x: x["score"])
+        if "ability_analysis" not in report:
+            report["ability_analysis"] = {}
+        # 生成能力详细分析（5项全覆盖，带差异化描述/建议）
+        ability_detail = self._build_ability_detail(abilities)
+
+        # 回填 strengths/areas 的文案，避免千篇一律
+        detail_by_ability = {d.get("ability"): d for d in ability_detail if d.get("ability")}
+        for s in strengths:
+            d = detail_by_ability.get(s.get("ability"))
+            if d and d.get("description"):
+                s["description"] = d["description"]
+            elif not s.get("description"):
+                s["description"] = "该项能力表现较好，可在职业发展中持续发挥。"
+        for a in areas_to_improve:
+            d = detail_by_ability.get(a.get("ability"))
+            if d and d.get("suggestions"):
+                a["suggestions"] = d["suggestions"]
+            elif not a.get("suggestions"):
+                a["suggestions"] = ["建议结合真实项目场景进行针对性训练与复盘。"]
+
+        report["ability_analysis"]["strengths"] = strengths
+        report["ability_analysis"]["areas_to_improve"] = areas_to_improve
+        report["ability_analysis"]["ability_detail"] = ability_detail
+
+        # 2) 性格特质：始终用后端计分覆盖五项，最低 20 分（避免 AI 或旧数据出现 0 分）
+        trait_scores = scores.get("traits") or {}
+        trait_names = ["外向性", "开放性", "尽责性", "宜人性", "情绪稳定性"]
+        level_map = lambda s: "高" if s >= 70 else "偏高" if s >= 55 else "中等" if s >= 40 else "偏低" if s >= 25 else "低"
+        report["personality_analysis"] = report.get("personality_analysis") or {}
+        report["personality_analysis"]["traits"] = [
+            {
+                "trait_name": name,
+                "score": min(100, max(20, int(trait_scores.get(name, 0)))),
+                "level": level_map(max(20, trait_scores.get(name, 0))),
+                "description": ""
+            }
+            for name in trait_names
+        ]
+        # 若 AI 未返回 MBTI，则根据五项特质做简易推断，保证报告页有显示
+        if not (report["personality_analysis"].get("mbti_type") or "").strip():
+            report["personality_analysis"]["mbti_type"] = self._infer_mbti_from_traits(trait_scores)
+
+        # 3) 兴趣匹配度：取 Holland 最高维度作为主要兴趣类型，其分数即兴趣匹配度
+        holland = scores.get("holland") or {}
+        if holland:
+            order = sorted(holland.keys(), key=lambda k: -holland[k])
+            top_letter = order[0] if order else "I"
+            top_score = holland.get(top_letter, 0)
+            code = "".join(order[:3]) if len(order) >= 3 else (order[0] * 3)
+            if "interest_analysis" not in report:
+                report["interest_analysis"] = {}
+            if "primary_interest" not in report["interest_analysis"]:
+                report["interest_analysis"]["primary_interest"] = {}
+            desc_map = {"R": "喜欢动手、操作与机械", "I": "喜欢观察、研究与分析", "A": "喜欢创作、表达与审美", "S": "喜欢与人沟通、助人", "E": "喜欢影响他人、领导", "C": "喜欢条理、数据与规范"}
+            report["interest_analysis"]["primary_interest"]["type"] = type_names.get(top_letter, top_letter)
+            report["interest_analysis"]["primary_interest"]["score"] = min(100, max(0, int(top_score)))
+            # 主要兴趣类型描述必须与计分结果一致，统一用当前类型的标准描述，避免与类型错位
+            report["interest_analysis"]["primary_interest"]["description"] = desc_map.get(top_letter, "")
+            report["interest_analysis"]["holland_code"] = code
+            dist = [{"type": type_names.get(k, k), "score": holland[k]} for k in ["R", "I", "A", "S", "E", "C"]]
+            dist.sort(key=lambda x: -x["score"])
+            report["interest_analysis"]["interest_distribution"] = dist
+        return report
+
+    def _match_ability_key(self, report_ability: str, keys_from_ai: dict) -> Optional[str]:
+        """根据报告中的能力名从 AI 返回的 key 中匹配（支持简称/全称不一致）"""
+        if not report_ability or not keys_from_ai:
+            return None
+        report_ability = (report_ability or "").strip()
+        if report_ability in keys_from_ai:
+            return report_ability
+        for k in keys_from_ai:
+            if (k or "").strip() == report_ability:
+                return k
+            if report_ability in (k or "") or (k or "") in report_ability:
+                return k
+        return None
+
+    def _generate_ability_descriptions(self, report: dict) -> dict:
+        """
+        用 AI 为能力分析中的优势与待提升项生成简短文字描述，不写死在前后端。
+        写入 ability_analysis.strengths[].description 与 areas_to_improve[].suggestions
+        """
+        aa = report.get("ability_analysis") or {}
+        strengths = list(aa.get("strengths") or [])
+        areas = list(aa.get("areas_to_improve") or [])
+        if not strengths and not areas:
+            return report
+        ability_data = json.dumps(
+            {"strengths": [{"ability": x.get("ability"), "score": x.get("score")} for x in strengths],
+             "areas_to_improve": [{"ability": x.get("ability"), "score": x.get("score")} for x in areas]},
+            ensure_ascii=False, indent=2
+        )
+        try:
+            from langchain_core.output_parsers import StrOutputParser
+            from langchain_core.prompts import PromptTemplate
+            try:
+                from model.factory import chat_model
+                model = chat_model
+            except ImportError:
+                from langchain_community.chat_models.tongyi import ChatTongyi
+                from utils.config_handler import rag_conf
+                model = ChatTongyi(model=rag_conf["chat_model_name"])
+            prompt_template = _load_prompt("ability_descriptions_prompt_path")
+            prompt = PromptTemplate(input_variables=["ability_data"], template=prompt_template)
+            chain = prompt | model | StrOutputParser()
+            # 能力描述生成限时 20 秒，超时则使用默认描述，避免报告总耗时过长
+            with ThreadPoolExecutor(max_workers=1) as ex:
+                future = ex.submit(chain.invoke, {"ability_data": ability_data})
+                try:
+                    raw = future.result(timeout=20)
+                except FuturesTimeoutError:
+                    raise TimeoutError("能力描述生成超时(20s)，使用默认描述")
+            out = _extract_json(raw)
+            desc_by_ability = {str(x.get("ability", "")).strip(): (x.get("description") or "").strip() for x in (out.get("strengths") or []) if x.get("ability")}
+            sugg_by_ability = {str(x.get("ability", "")).strip(): (x.get("suggestions") or []) for x in (out.get("areas_to_improve") or []) if x.get("ability")}
+            for s in strengths:
+                key = self._match_ability_key(s.get("ability"), desc_by_ability)
+                if key and desc_by_ability.get(key):
+                    s["description"] = desc_by_ability[key]
+                elif not s.get("description"):
+                    s["description"] = "该项能力表现较好，可在职业发展中持续发挥。"
+            for a in areas:
+                key = self._match_ability_key(a.get("ability"), sugg_by_ability)
+                if key and sugg_by_ability.get(key):
+                    a["suggestions"] = [str(x).strip() for x in sugg_by_ability[key] if x]
+                elif not a.get("suggestions"):
+                    a["suggestions"] = ["可通过练习与项目实践持续提升。"]
+            report["ability_analysis"]["strengths"] = strengths
+            report["ability_analysis"]["areas_to_improve"] = areas
+            logger.info("[Assessment] 能力描述 AI 生成完成，待提升 %s 条已写入", len(areas))
+        except Exception as e:
+            logger.warning("[Assessment] 能力描述 AI 生成失败，保留原描述: %s", e, exc_info=True)
+        return report
+
+    def _generate_report_with_ai(self, user_id: int, assessment_id: str, answers: List[dict], scores: dict) -> dict:
+        """
+        AI核心算法：调用通义大模型（qwen-plus）生成综合测评报告。
+        输入：用户档案 + 答题数据 + 计分结果
+        输出：霍兰德分析 + MBTI分析 + 能力分析 + 价值观分析 + 职业建议
+        """
+        try:
+            from langchain_core.output_parsers import StrOutputParser
+            from langchain_core.prompts import PromptTemplate
+
+            # 模型加载（与profile_service保持一致）
+            try:
+                from model.factory import chat_model
+                model = chat_model
+            except ImportError:
+                from langchain_community.chat_models.tongyi import ChatTongyi
+                from utils.config_handler import rag_conf
+                model = ChatTongyi(model=rag_conf["chat_model_name"])
+
+            # 加载用户档案（如果有的话）
+            try:
+                from profile.profile_service import ProfileService
+                profile_service = ProfileService()
+                user_profile_data = profile_service.get_profile(user_id)
+                user_profile = json.dumps(user_profile_data, ensure_ascii=False, indent=2)
+            except Exception:
+                user_profile = "用户档案暂无"
+
+            # 构造prompt输入
+            prompt_template = _load_prompt("assessment_report_prompt_path")
+            prompt = PromptTemplate(
+                input_variables=["user_profile", "answers_data", "dimension_scores"],
+                template=prompt_template
+            )
+            chain = prompt | model | StrOutputParser()
+
+            # 调用模型（限时 35 秒，超时则走本地模板，避免报告生成卡死）
+            invoke_args = {
+                "user_profile": user_profile,
+                "answers_data": json.dumps(answers, ensure_ascii=False, indent=2),
+                "dimension_scores": json.dumps(scores, ensure_ascii=False, indent=2),
+            }
+            with ThreadPoolExecutor(max_workers=1) as ex:
+                future = ex.submit(chain.invoke, invoke_args)
+                try:
+                    raw_output = future.result(timeout=35)
+                except FuturesTimeoutError:
+                    raise TimeoutError("报告生成超时(35s)，使用本地模板")
+
+            # 解析JSON
+            report_data = _extract_json(raw_output)
+            logger.info(f"[Assessment] AI报告生成完成，confidence={report_data.get('confidence_score', 0)}")
+            return report_data
+        except Exception as e:
+            # 大模型调用失败时，使用本地模板生成一个基础报告，避免前端 500
+            logger.error("[Assessment] 调用大模型生成报告失败，使用本地模板: %s", e, exc_info=True)
+            holland = scores.get("holland") or {}
+            traits = scores.get("traits") or {}
+            abilities = scores.get("abilities") or {}
+            values = scores.get("values") or {}
+
+            # 生成一个简单的本地报告结构，兼容前端字段（全部基于本次计分结果）
+            type_names = {"R": "实用型(R)", "I": "研究型(I)", "A": "艺术型(A)", "S": "社会型(S)", "E": "企业型(E)", "C": "常规型(C)"}
+            desc_map = {"R": "喜欢动手、操作与机械", "I": "喜欢观察、研究与分析", "A": "喜欢创作、表达与审美", "S": "喜欢与人沟通、助人", "E": "喜欢影响他人、领导", "C": "喜欢条理、数据与规范"}
+            order = sorted(holland.keys(), key=lambda k: -holland[k]) if holland else ["I", "R", "A"]
+            top_letter = order[0] if order else "I"
+            top_score = holland.get(top_letter, 0) if holland else 75
+            primary_trait = max(traits.items(), key=lambda x: x[1])[0] if traits else "外向性"
+            primary_ability = max(abilities.items(), key=lambda x: x[1])[0] if abilities else "学习能力"
+            mbti_fallback = self._infer_mbti_from_traits(traits)
+
+            return {
+                "status": "completed",
+                "holland_scores": holland,
+                "trait_scores": traits,
+                "ability_scores": abilities,
+                "value_scores": values,
+                "interest_analysis": {
+                    "primary_interest": {
+                        "type": type_names.get(top_letter, top_letter),
+                        "score": min(100, max(0, int(top_score))),
+                        "description": desc_map.get(top_letter, "")
+                    },
+                    "holland_code": "".join(order[:3]) if len(order) >= 3 else (order[0] * 3) if order else "RIA",
+                    "interest_distribution": [
+                        {"type": type_names.get(k, k), "score": v} for k, v in (sorted(holland.items(), key=lambda x: -x[1]) if holland else [])
+                    ],
+                },
+                "personality_analysis": {
+                    "mbti_type": mbti_fallback,
+                    "traits": [
+                        {
+                            "trait_name": name,
+                            "score": score,
+                            "level": "高" if score >= 70 else "中等" if score >= 40 else "偏低",
+                            "description": ""
+                        }
+                        for name, score in traits.items()
+                    ],
+                    "primary_trait": primary_trait,
+                },
+                "ability_analysis": {
+                    "strengths": [
+                        {"ability": name, "score": score, "description": "该项能力表现较为突出"}
+                        for name, score in abilities.items() if score >= 75
+                    ],
+                    "areas_to_improve": [
+                        {"ability": name, "score": score, "suggestions": ["可以通过实践和项目训练进行提升"]}
+                        for name, score in abilities.items() if score < 70
+                    ],
+                },
+                "values_analysis": {
+                    "scores": values
+                },
+                "career_suggestions": {
+                    "summary": "这是基于本地规则生成的基础职业建议，用于在大模型不可用时保障功能可用。",
+                    "suggested_fields": [],
+                    "tips": [
+                        "可以根据自己的兴趣和能力，重点关注与计算机、互联网、数据相关的岗位。",
+                        "建议多参与项目实践，丰富个人履历。"
+                    ]
+                },
+                "confidence_score": 0.6,
+            }
+
+    # ==================================================
+    # 3.3 获取测评报告
+    # ==================================================
+    def get_report(self, user_id: int, report_id: str) -> Optional[dict]:
+        """
+        获取测评报告（轮询任务状态）。
+        对应 API 文档 3.3
+        """
+        # 先查任务状态
+        task = self.tasks.get(report_id)
+        if not task:
+            return None
+
+        if task["status"] == "processing":
+            return {
+                "report_id": report_id,
+                "status": "processing",
+                "message": "报告生成中，请稍后查询"
+            }
+        elif task["status"] == "failed":
+            return {
+                "report_id": report_id,
+                "status": "failed",
+                "error": task.get("error", "未知错误")
+            }
+        else:  # completed
+            report = self.reports.get(report_id)
+            if not report:
+                return None
+            return report
+
+    # ==================================================
+    # 历史报告列表（供 GET /assessment/report-history）
+    # ==================================================
+    def list_reports_for_user(self, user_id: int) -> List[dict]:
+        """
+        查询该用户所有已完成的测评报告，按创建时间倒序。
+        返回简要信息：report_id, created_at, holland_code, mbti, match_score
+        """
+        out = []
+        for rid, report in self.reports.items():
+            if report.get("user_id") != user_id:
+                continue
+            if report.get("status") != "completed":
+                continue
+            interest = report.get("interest_analysis") or {}
+            primary = interest.get("primary_interest") or {}
+            personality = report.get("personality_analysis") or {}
+            created = report.get("created_at") or ""
+            # 格式化为 "2026-02-20 17:28"
+            if len(created) >= 16:
+                created = created[:16].rstrip()
+            elif created and len(created) == 19:
+                created = created[:16]
+            out.append({
+                "report_id": rid,
+                "created_at": created,
+                "holland_code": interest.get("holland_code") or "",
+                "mbti": personality.get("mbti_type") or "",
+                "match_score": primary.get("score") if primary.get("score") is not None else 0
+            })
+        out.sort(key=lambda x: x["created_at"] or "", reverse=True)
+        return out
+
+
+# ===== 单例获取 =====
+_service_instance = None
+
+
+def get_assessment_service() -> AssessmentService:
+    global _service_instance
+    if _service_instance is None:
+        _service_instance = AssessmentService()
+    return _service_instance

@@ -1,0 +1,2332 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>HR评估管理 - 职业规划智能体</title>
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect fill='%231e3a5f' width='32' height='32' rx='4'/><text x='16' y='22' text-anchor='middle' fill='white' font-size='18'>C</text></svg>" type="image/svg+xml">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:ital,wght@0,300;0,400;0,500;0,600;0,700;0,800;1,600&family=Sora:wght@400;600;700&display=swap" rel="stylesheet" media="print" onload="this.media='all'">
+    <link rel="stylesheet" href="styles.css?v=4">
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@400;600;700&family=Noto+Sans+SC:wght@300;400;500;600&display=swap">
+    <style>
+        body.hr-page-body {
+            display: block !important;
+            height: auto !important;
+        }
+        .hr-page-app {
+            display: block !important;
+            width: 100% !important;
+        }
+        .hr-main-content {
+            max-width: 1600px !important;
+            margin-left: auto !important;
+            margin-right: auto !important;
+            width: 100% !important;
+            padding-left: 32px;
+            padding-right: 32px;
+            box-sizing: border-box;
+        }
+        .hr-navbar-inner {
+            max-width: 1600px !important;
+            margin-left: auto !important;
+            margin-right: auto !important;
+            width: 100% !important;
+            padding-left: 32px;
+            padding-right: 32px;
+            box-sizing: border-box;
+        }
+        .invite-table .col-status {
+            white-space: nowrap;
+            min-width: 80px;
+        }
+        .invite-table .col-action {
+            white-space: nowrap;
+            min-width: 90px;
+            text-align: right;
+        }
+        .invite-table .btn-fill-eval,
+        .btn-fill-eval {
+            background: #0f0f0d !important;
+            color: #fff !important;
+            border: none !important;
+            padding: 7px 18px;
+            border-radius: 6px;
+            font-size: 13px;
+            font-weight: 500;
+            cursor: pointer;
+            white-space: nowrap;
+        }
+        .invite-table .btn-fill-eval:hover,
+        .btn-fill-eval:hover { opacity: 0.85; }
+
+        /* 简历详情弹窗：沿用 resume-modal 双栏、暖白+墨绿+墨黑、无圆角、细边框 */
+        @import url('https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@300;400;500;600&family=DM+Mono:wght@300;400&display=swap');
+        #studentModal.resume-detail-overlay {
+            --cream: #f6f4ef;
+            --sage: #2d6a4f;
+            --sage-light: #e8f0eb;
+            --ink: #0f0f0d;
+            --ink-50: rgba(15,15,13,0.5);
+            --rule: #d8d4cc;
+            --amber: #b56a00;
+            position: fixed; inset: 0;
+            background: rgba(15,15,13,.55);
+            display: none;
+            align-items: center;
+            justify-content: center;
+            z-index: 10000;
+            opacity: 0;
+            transition: opacity .2s;
+            font-family: 'Noto Serif SC', serif;
+            color: var(--ink);
+        }
+        #studentModal.resume-detail-overlay.active { display: flex; }
+        #studentModal.resume-detail-overlay.visible { opacity: 1; }
+        #studentModal .resume-detail-modal {
+            width: 92vw;
+            max-width: 1100px;
+            max-height: 88vh;
+            background: var(--cream);
+            border: 1px solid var(--rule);
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            transform: translateY(12px);
+            transition: transform .22s ease;
+        }
+        #studentModal.visible .resume-detail-modal { transform: translateY(0); }
+        #studentModal .resume-modal-bar {
+            display: flex;
+            align-items: center;
+            padding: 0 32px;
+            height: 48px;
+            border-bottom: 1px solid var(--rule);
+            flex-shrink: 0;
+        }
+        #studentModal .resume-modal-bar .breadcrumb {
+            font-size: 11px;
+            font-family: 'DM Mono', monospace;
+            color: var(--ink-50);
+            letter-spacing: .06em;
+        }
+        #studentModal .resume-modal-bar .breadcrumb span { color: var(--ink); }
+        #studentModal .resume-modal-close {
+            margin-left: auto;
+            width: 28px; height: 28px;
+            border: 1px solid var(--rule);
+            background: none;
+            cursor: pointer;
+            display: flex; align-items: center; justify-content: center;
+            font-size: 14px;
+            transition: all .15s;
+            color: var(--ink);
+        }
+        #studentModal .resume-modal-close:hover { background: var(--ink); color: var(--cream); }
+        #studentModal .resume-modal-body {
+            display: grid;
+            grid-template-columns: 300px 1fr;
+            overflow: hidden;
+            flex: 1;
+        }
+        #studentModal .resume-col-left {
+            border-right: 1px solid var(--ink);
+            overflow-y: auto;
+            padding: 32px 28px;
+            display: flex;
+            flex-direction: column;
+            gap: 28px;
+            background: #f0ede6;
+        }
+        #studentModal .resume-candidate-id {
+            font-family: 'DM Mono', monospace;
+            font-size: 11px;
+            color: var(--ink-50);
+            letter-spacing: .1em;
+            margin-bottom: 4px;
+        }
+        #studentModal .resume-candidate-name {
+            font-size: 22px;
+            font-weight: 500;
+            letter-spacing: .02em;
+            line-height: 1.2;
+        }
+        #studentModal .resume-candidate-sub {
+            font-size: 12px;
+            color: var(--ink-50);
+            margin-top: 4px;
+            line-height: 1.6;
+        }
+        #studentModal .resume-divider { width: 100%; height: 1px; background: var(--rule); }
+        #studentModal .resume-meta-block { display: flex; flex-direction: column; gap: 10px; }
+        #studentModal .resume-meta-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: baseline;
+            font-size: 12px;
+        }
+        #studentModal .resume-meta-label { color: var(--ink-50); }
+        #studentModal .resume-meta-value { font-weight: 500; }
+        #studentModal .resume-score-display {
+            background: var(--sage);
+            color: white;
+            padding: 16px 20px;
+            display: flex;
+            align-items: baseline;
+            gap: 6px;
+        }
+        #studentModal .resume-score-num {
+            font-family: 'DM Mono', monospace;
+            font-size: 36px;
+            font-weight: 300;
+            line-height: 1;
+        }
+        #studentModal .resume-score-label { font-size: 12px; opacity: .75; }
+        #studentModal .resume-score-display.resume-score-display--pending {
+            background: #888;
+            color: #fff;
+        }
+        #studentModal .resume-score-display.resume-score-display--pending .resume-score-label {
+            opacity: 0.92;
+        }
+        #studentModal .resume-btn-primary:disabled {
+            background: #b5b3ad !important;
+            color: rgba(255, 255, 255, 0.92);
+            cursor: not-allowed;
+            border: none;
+        }
+        #studentModal .resume-btn-primary:disabled:hover {
+            background: #b5b3ad !important;
+        }
+        #studentModal .resume-skill-section { display: flex; flex-direction: column; gap: 8px; }
+        #studentModal .resume-section-title {
+            font-size: 10px;
+            letter-spacing: .12em;
+            text-transform: uppercase;
+            color: var(--ink-50);
+            margin-bottom: 2px;
+            font-family: 'DM Mono', monospace;
+        }
+        #studentModal .resume-skill-grid { display: flex; flex-wrap: wrap; gap: 5px; }
+        #studentModal .resume-skill-chip {
+            font-size: 11px;
+            font-family: 'DM Mono', monospace;
+            padding: 3px 9px;
+            border: 1px solid var(--rule);
+            background: var(--cream);
+            color: var(--ink);
+        }
+        #studentModal .resume-skill-chip.highlight {
+            background: var(--sage-light);
+            border-color: rgba(45,106,79,.3);
+            color: var(--sage);
+        }
+        #studentModal .resume-contact-block { display: flex; flex-direction: column; gap: 6px; font-size: 11px; color: var(--ink-50); font-family: 'DM Mono', monospace; }
+        #studentModal .resume-contact-block a { color: var(--ink-50); text-decoration: none; }
+        #studentModal .resume-col-right { overflow-y: auto; padding: 0; }
+        #studentModal .resume-section-block {
+            padding: 28px 36px;
+            border-bottom: 1px solid var(--rule);
+        }
+        #studentModal .resume-section-block:last-child { border-bottom: none; }
+        #studentModal .resume-sec-head {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 20px;
+        }
+        #studentModal .resume-sec-head h3 {
+            font-size: 11px;
+            letter-spacing: .12em;
+            text-transform: uppercase;
+            font-weight: 400;
+            font-family: 'DM Mono', monospace;
+            color: var(--ink-50);
+        }
+        #studentModal .resume-sec-head::after {
+            content: '';
+            flex: 1;
+            height: 1px;
+            background: var(--rule);
+        }
+        #studentModal .resume-exp-item {
+            display: grid;
+            grid-template-columns: 180px 1fr;
+            gap: 0 28px;
+            margin-bottom: 24px;
+        }
+        #studentModal .resume-exp-item:last-child { margin-bottom: 0; }
+        #studentModal .resume-exp-meta { padding-top: 2px; }
+        #studentModal .resume-exp-date {
+            font-family: 'DM Mono', monospace;
+            font-size: 10px;
+            color: var(--ink-50);
+            letter-spacing: .04em;
+            margin-bottom: 4px;
+        }
+        #studentModal .resume-exp-org { font-size: 12px; font-weight: 500; color: var(--sage); margin-bottom: 2px; }
+        #studentModal .resume-exp-role { font-size: 11px; color: var(--ink-50); }
+        #studentModal .resume-exp-title { font-size: 14px; font-weight: 500; margin-bottom: 7px; line-height: 1.3; }
+        #studentModal .resume-exp-desc { font-size: 12px; color: rgba(15,15,13,.7); line-height: 1.75; }
+        #studentModal .resume-exp-tech { margin-top: 8px; display: flex; flex-wrap: wrap; gap: 4px; }
+        #studentModal .resume-tech-tag {
+            font-size: 10px;
+            font-family: 'DM Mono', monospace;
+            padding: 2px 8px;
+            background: #ede9e1;
+            color: var(--ink-50);
+        }
+        #studentModal .resume-edu-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 0; }
+        #studentModal .resume-edu-cell {
+            padding: 16px 20px;
+            border-right: 1px solid var(--rule);
+        }
+        #studentModal .resume-edu-cell:last-child { border-right: none; }
+        #studentModal .resume-edu-cell-label { font-size: 10px; color: var(--ink-50); letter-spacing: .08em; font-family: 'DM Mono', monospace; text-transform: uppercase; margin-bottom: 6px; }
+        #studentModal .resume-edu-cell-value { font-size: 14px; font-weight: 500; }
+        #studentModal .resume-edu-cell-sub { font-size: 11px; color: var(--ink-50); margin-top: 2px; }
+        #studentModal .resume-award-list { display: flex; flex-direction: column; gap: 10px; }
+        #studentModal .resume-award-item {
+            display: flex;
+            align-items: baseline;
+            gap: 12px;
+            font-size: 12px;
+            padding: 10px 14px;
+            background: rgba(15,15,13,.03);
+            border-left: 2px solid transparent;
+        }
+        #studentModal .resume-award-item.top { border-left-color: var(--amber); }
+        #studentModal .resume-award-year { font-family: 'DM Mono', monospace; font-size: 10px; color: var(--ink-50); flex-shrink: 0; width: 36px; }
+        #studentModal .resume-award-name { flex: 1; line-height: 1.4; }
+        #studentModal .resume-award-level {
+            font-size: 10px;
+            font-family: 'DM Mono', monospace;
+            padding: 2px 6px;
+            background: var(--sage-light);
+            color: var(--sage);
+            flex-shrink: 0;
+        }
+        #studentModal .resume-award-level.amber { background: #fdf0e0; color: var(--amber); }
+        #studentModal .resume-cert-row { display: flex; flex-wrap: wrap; gap: 8px; }
+        #studentModal .resume-cert-chip {
+            font-size: 11px;
+            font-family: 'DM Mono', monospace;
+            padding: 5px 14px;
+            border: 1px solid var(--ink);
+            display: flex; align-items: center; gap: 6px;
+        }
+        #studentModal .resume-cert-chip::before {
+            content: '✓';
+            color: var(--sage);
+            font-size: 10px;
+        }
+        #studentModal .resume-modal-footer {
+            padding: 14px 32px;
+            border-top: 1px solid var(--rule);
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            flex-shrink: 0;
+            background: #f0ede6;
+        }
+        #studentModal .resume-footer-status { font-family: 'DM Mono', monospace; font-size: 10px; color: var(--ink-50); letter-spacing: .06em; }
+        #studentModal .resume-btn-primary {
+            margin-left: auto;
+            padding: 9px 24px;
+            background: var(--sage);
+            color: white;
+            border: none;
+            font-family: 'Noto Serif SC', serif;
+            font-size: 12px;
+            cursor: pointer;
+            letter-spacing: .04em;
+            transition: background .15s;
+        }
+        #studentModal .resume-btn-primary:hover { background: #245a41; }
+        #studentModal .resume-btn-secondary {
+            padding: 9px 24px;
+            background: transparent;
+            color: var(--ink);
+            border: 1px solid var(--ink);
+            font-family: 'Noto Serif SC', serif;
+            font-size: 12px;
+            cursor: pointer;
+            transition: all .15s;
+        }
+        #studentModal .resume-btn-secondary:hover { background: var(--ink); color: var(--cream); }
+
+        #studentModal .resume-privacy-banner {
+            background: #fdf6e8;
+            border-bottom: 1px solid #e8d5a3;
+            padding: 10px 32px;
+            font-size: 12px;
+            color: #6b5a28;
+            flex-shrink: 0;
+            line-height: 1.5;
+        }
+        #studentModal .resume-incomplete-placeholder {
+            font-size: 13px;
+            color: rgba(15, 15, 13, 0.45);
+            line-height: 1.75;
+            margin: 0;
+            padding: 4px 0 8px;
+        }
+
+        /* —— HR评估报告弹窗 v2（980px / 一屏无滚动） —— */
+        #evalReportModal.erp-overlay {
+            position: fixed;
+            inset: 0;
+            z-index: 9999;
+            background: rgba(15, 15, 13, 0.48);
+            display: none;
+            align-items: flex-start;
+            justify-content: center;
+            overflow-x: hidden;
+            overflow-y: auto;
+            padding: 20px 16px;
+            box-sizing: border-box;
+            -webkit-overflow-scrolling: touch;
+        }
+        #evalReportModal .erp-shell {
+            width: 980px;
+            max-width: calc(100vw - 32px);
+            height: min(680px, calc(90vh - 40px));
+            max-height: min(680px, calc(90vh - 40px));
+            min-height: 0;
+            background: #fff;
+            border-radius: 4px;
+            overflow: hidden;
+            box-shadow: 0 24px 70px rgba(0, 0, 0, 0.22);
+            display: flex;
+            flex-direction: column;
+            border: 1px solid #e2ead8;
+            margin: 0 auto;
+            flex-shrink: 0;
+        }
+        #evalReportModal .erp-header {
+            background: #2d4a2d;
+            padding: 14px 28px 12px;
+            flex-shrink: 0;
+        }
+        #evalReportModal .erp-header-top {
+            display: flex;
+            align-items: flex-start;
+            justify-content: space-between;
+            margin-bottom: 11px;
+        }
+        #evalReportModal .erp-title {
+            font-family: 'Noto Serif SC', 'Songti SC', serif;
+            font-size: 18px;
+            font-weight: 700;
+            color: #fff;
+            letter-spacing: 2px;
+            margin: 0;
+        }
+        #evalReportModal .erp-sub {
+            font-family: 'Noto Sans SC', sans-serif;
+            font-size: 11px;
+            color: rgba(255, 255, 255, 0.45);
+            margin: 2px 0 0;
+        }
+        #evalReportModal .erp-close {
+            width: 28px;
+            height: 28px;
+            border: none;
+            background: rgba(255, 255, 255, 0.1);
+            color: rgba(255, 255, 255, 0.75);
+            font-size: 16px;
+            line-height: 1;
+            cursor: pointer;
+            border-radius: 2px;
+            flex-shrink: 0;
+        }
+        #evalReportModal .erp-close:hover {
+            background: rgba(255, 255, 255, 0.18);
+            color: #fff;
+        }
+        #evalReportModal .erp-header-info {
+            display: flex;
+            align-items: stretch;
+            flex-wrap: wrap;
+            background: rgba(255, 255, 255, 0.07);
+            border-radius: 2px;
+            overflow: hidden;
+            gap: 0;
+        }
+        #evalReportModal .erp-info-cell {
+            padding: 7px 14px;
+            border-right: 1px solid rgba(255, 255, 255, 0.08);
+            flex: 1;
+            min-width: 0;
+        }
+        #evalReportModal .erp-info-cell:last-child {
+            border-right: none;
+            flex: none;
+        }
+        #evalReportModal .erp-info-cell-label {
+            font-family: 'Noto Sans SC', sans-serif;
+            font-size: 10px;
+            color: rgba(255, 255, 255, 0.4);
+            margin-bottom: 2px;
+            letter-spacing: 0.5px;
+        }
+        #evalReportModal .erp-info-cell-value {
+            font-family: 'Noto Sans SC', sans-serif;
+            font-size: 13px;
+            color: #fff;
+            font-weight: 500;
+            line-height: 1.3;
+            word-break: break-all;
+        }
+        #evalReportModal .erp-info-cell-value.erp-bold {
+            font-weight: 600;
+        }
+        #evalReportModal .erp-verdict-cells {
+            display: flex;
+            gap: 6px;
+            padding: 6px 12px;
+            align-items: center;
+        }
+        #evalReportModal .erp-verdict {
+            text-align: center;
+            padding: 3px 12px;
+        }
+        #evalReportModal .erp-verdict-label {
+            font-size: 9px;
+            color: rgba(255, 255, 255, 0.4);
+            margin-bottom: 1px;
+            letter-spacing: 0.3px;
+        }
+        #evalReportModal .erp-verdict-val {
+            font-size: 13px;
+            font-weight: 600;
+        }
+        #evalReportModal .erp-verdict--ok .erp-verdict-val {
+            color: #a8d88a;
+        }
+        #evalReportModal .erp-verdict--hi .erp-verdict-val {
+            color: #f0c060;
+        }
+        #evalReportModal .erp-score-strip {
+            background: #f4f8f1;
+            border-bottom: 1px solid #e2ead8;
+            padding: 8px 28px;
+            display: flex;
+            align-items: center;
+            gap: 20px;
+            flex-shrink: 0;
+        }
+        #evalReportModal .erp-avg-block {
+            display: flex;
+            align-items: baseline;
+            gap: 4px;
+        }
+        #evalReportModal .erp-avg-num {
+            font-family: 'Noto Serif SC', serif;
+            font-size: 34px;
+            font-weight: 700;
+            color: #4a6741;
+            line-height: 1;
+        }
+        #evalReportModal .erp-avg-denom {
+            font-family: 'Noto Sans SC', sans-serif;
+            font-size: 12px;
+            color: #8a8a8a;
+        }
+        #evalReportModal .erp-avg-label {
+            font-family: 'Noto Sans SC', sans-serif;
+            font-size: 11px;
+            color: #8a8a8a;
+            margin-top: 2px;
+        }
+        #evalReportModal .erp-score-divider {
+            width: 1px;
+            height: 36px;
+            background: #e2ead8;
+            flex-shrink: 0;
+        }
+        #evalReportModal .erp-mini-scores {
+            display: flex;
+            gap: 16px;
+            flex: 1;
+            min-width: 0;
+            flex-wrap: wrap;
+            justify-content: center;
+        }
+        #evalReportModal .erp-mini-score {
+            text-align: center;
+            min-width: 52px;
+        }
+        #evalReportModal .erp-mini-score-val {
+            font-family: 'Noto Sans SC', sans-serif;
+            font-size: 16px;
+            font-weight: 700;
+            color: #4a6741;
+        }
+        #evalReportModal .erp-mini-score-val.erp-gold {
+            color: #b8860b;
+        }
+        #evalReportModal .erp-mini-score-label {
+            font-size: 10px;
+            color: #8a8a8a;
+            margin-top: 2px;
+        }
+        #evalReportModal .erp-rank-badge {
+            margin-left: auto;
+            flex-shrink: 0;
+            background: #4a6741;
+            color: #fff;
+            padding: 5px 14px;
+            border-radius: 2px;
+            font-size: 12px;
+            font-weight: 500;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 1px;
+        }
+        #evalReportModal .erp-rank-badge span:first-child {
+            font-size: 9px;
+            opacity: 0.75;
+            letter-spacing: 0.5px;
+        }
+        #evalReportModal .erp-rank-badge span:last-child {
+            font-size: 16px;
+            font-weight: 700;
+        }
+        #evalReportModal .erp-body {
+            display: flex;
+            flex: 1 1 0;
+            min-height: 0;
+            min-width: 0;
+            overflow: hidden;
+            align-items: stretch;
+        }
+        #evalReportModal .erp-left {
+            flex: 0 0 min(340px, 100%);
+            width: min(340px, 100%);
+            max-width: 100%;
+            box-sizing: border-box;
+            padding: 12px 16px;
+            border-right: 1px solid #e2ead8;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            min-height: 0;
+            overflow-x: hidden;
+            overflow-y: auto;
+        }
+        #evalReportModal .erp-section-label {
+            font-family: 'Noto Sans SC', sans-serif;
+            font-size: 10px;
+            color: #8a8a8a;
+            letter-spacing: 0.8px;
+            margin-bottom: 4px;
+        }
+        #evalReportModal .erp-radar-wrap {
+            display: flex;
+            justify-content: center;
+        }
+        #evalReportModal #reportRadarChart {
+            display: block;
+            width: 220px;
+            height: 170px;
+        }
+        #evalReportModal .erp-pro-con {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 8px;
+        }
+        #evalReportModal .erp-pro-box,
+        #evalReportModal .erp-con-box {
+            padding: 7px 9px;
+            border-radius: 2px;
+        }
+        #evalReportModal .erp-pro-box {
+            background: #eef4ea;
+            border: 1px solid #c8e0ba;
+        }
+        #evalReportModal .erp-con-box {
+            background: #fff8e7;
+            border: 1px solid #e8d5a3;
+        }
+        #evalReportModal .erp-box-title {
+            font-size: 10px;
+            font-weight: 600;
+            letter-spacing: 0.3px;
+            margin-bottom: 4px;
+            display: flex;
+            align-items: center;
+            gap: 4px;
+        }
+        #evalReportModal .erp-pro-box .erp-box-title {
+            color: #4a6741;
+        }
+        #evalReportModal .erp-con-box .erp-box-title {
+            color: #b8860b;
+        }
+        #evalReportModal .erp-box-dot {
+            width: 5px;
+            height: 5px;
+            border-radius: 50%;
+            flex-shrink: 0;
+        }
+        #evalReportModal .erp-pro-box .erp-box-dot {
+            background: #4a6741;
+        }
+        #evalReportModal .erp-con-box .erp-box-dot {
+            background: #b8860b;
+        }
+        #evalReportModal .erp-box-text {
+            font-family: 'Noto Sans SC', sans-serif;
+            font-size: 10px;
+            color: #4a4a4a;
+            line-height: 1.5;
+            margin: 0;
+        }
+        #evalReportModal .erp-job-tags {
+            display: flex;
+            gap: 6px;
+            flex-wrap: wrap;
+        }
+        #evalReportModal .erp-job-tag {
+            background: #eef4ea;
+            border: 1px solid #c0d8b0;
+            color: #2d4a2d;
+            font-size: 11px;
+            padding: 3px 10px;
+            border-radius: 2px;
+            font-weight: 500;
+            font-family: 'Noto Sans SC', sans-serif;
+        }
+        #evalReportModal .erp-right {
+            flex: 1 1 0;
+            min-width: 0;
+            min-height: 0;
+            padding: 12px 20px 14px;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            overflow-x: hidden;
+            overflow-y: auto;
+        }
+        #evalReportModal .erp-divider-label {
+            font-family: 'Noto Sans SC', sans-serif;
+            font-size: 10px;
+            color: #8a8a8a;
+            letter-spacing: 0.8px;
+            padding-bottom: 6px;
+            border-bottom: 1px solid #e2ead8;
+            margin-bottom: 2px;
+        }
+        #evalReportModal .erp-bars {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 8px 20px;
+        }
+        #evalReportModal .erp-bar-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: baseline;
+            margin-bottom: 4px;
+        }
+        #evalReportModal .erp-bar-name {
+            font-family: 'Noto Sans SC', sans-serif;
+            font-size: 12px;
+            color: #1c1c1c;
+            font-weight: 500;
+        }
+        #evalReportModal .erp-bar-score {
+            font-family: 'Noto Sans SC', sans-serif;
+            font-size: 14px;
+            font-weight: 700;
+            color: #4a6741;
+            font-variant-numeric: tabular-nums;
+        }
+        #evalReportModal .erp-bar-score.erp-gold {
+            color: #b8860b;
+        }
+        #evalReportModal .erp-bar-track {
+            height: 5px;
+            background: #e8efdf;
+            border-radius: 3px;
+            overflow: hidden;
+        }
+        #evalReportModal .erp-bar-fill {
+            height: 100%;
+            border-radius: 3px;
+            background: linear-gradient(90deg, #7a9e6a, #4a6741);
+        }
+        #evalReportModal .erp-bar-fill.erp-gold {
+            background: linear-gradient(90deg, #e8c060, #b8860b);
+        }
+        #evalReportModal .erp-timeline-section {
+            margin-top: -4px;
+            margin-bottom: -4px;
+        }
+        #evalReportModal .erp-timeline-section > .erp-divider-label {
+            padding-bottom: 2px;
+        }
+        #evalReportModal .erp-timeline-h {
+            display: flex;
+            gap: 0;
+            position: relative;
+        }
+        #evalReportModal .erp-timeline-h::before {
+            content: '';
+            position: absolute;
+            top: 6px;
+            left: 12px;
+            right: 12px;
+            height: 1px;
+            background: #e2ead8;
+            z-index: 0;
+        }
+        #evalReportModal .erp-tl-item-h {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            position: relative;
+            z-index: 1;
+            padding: 0 4px;
+        }
+        #evalReportModal .erp-tl-dot-h {
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            border: 2px solid #4a6741;
+            background: #fff;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-bottom: 1px;
+            flex-shrink: 0;
+        }
+        #evalReportModal .erp-tl-dot-h.filled {
+            background: #4a6741;
+        }
+        #evalReportModal .erp-tl-dot-h.filled::after {
+            content: '✓';
+            font-size: 9px;
+            color: #fff;
+        }
+        #evalReportModal .erp-tl-dot-h.pending {
+            border-color: #d0d5cc;
+            background: #fff;
+        }
+        #evalReportModal .erp-tl-dot-h.pending::after {
+            content: '';
+        }
+        #evalReportModal .erp-tl-date-h {
+            font-size: 10px;
+            color: #8a8a8a;
+            margin-bottom: 2px;
+            text-align: center;
+        }
+        #evalReportModal .erp-tl-title-h {
+            font-family: 'Noto Sans SC', sans-serif;
+            font-size: 11px;
+            font-weight: 600;
+            color: #1c1c1c;
+            text-align: center;
+            margin-bottom: 2px;
+        }
+        #evalReportModal .erp-tl-desc-h {
+            font-size: 9px;
+            color: #4a4a4a;
+            text-align: center;
+            line-height: 1.4;
+        }
+        #evalReportModal .erp-ai-box {
+            background: linear-gradient(135deg, #f4f8f1, #eef4ea);
+            border: 1px solid #c8e0ba;
+            border-radius: 2px;
+            padding: 8px 12px;
+            flex-shrink: 0;
+        }
+        #evalReportModal .erp-ai-header {
+            display: flex;
+            align-items: center;
+            gap: 7px;
+            margin-bottom: 4px;
+        }
+        #evalReportModal .erp-ai-icon {
+            width: 20px;
+            height: 20px;
+            background: #4a6741;
+            border-radius: 2px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 11px;
+        }
+        #evalReportModal .erp-ai-title {
+            font-family: 'Noto Sans SC', sans-serif;
+            font-size: 12px;
+            font-weight: 600;
+            color: #2d4a2d;
+        }
+        #evalReportModal #reportInsight {
+            font-family: 'Noto Sans SC', sans-serif;
+            font-size: 10px;
+            color: #4a4a4a;
+            line-height: 1.6;
+            margin: 0;
+            white-space: pre-line;
+        }
+        #evalReportModal .erp-footer {
+            padding: 9px 28px;
+            border-top: 1px solid #e2ead8;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            background: #fafdf8;
+            flex-shrink: 0;
+        }
+        #evalReportModal .erp-footer-meta {
+            font-family: 'Noto Sans SC', sans-serif;
+            font-size: 11px;
+            color: #8a8a8a;
+        }
+        #evalReportModal .erp-btn-outline {
+            background: none;
+            border: 1px solid #e2ead8;
+            padding: 5px 14px;
+            font-size: 12px;
+            cursor: pointer;
+            border-radius: 2px;
+            color: #4a4a4a;
+            font-family: 'Noto Sans SC', sans-serif;
+        }
+        #evalReportModal .erp-btn-outline:hover {
+            border-color: #c0d8b0;
+            color: #2d4a2d;
+        }
+        #evalReportModal .erp-btn-primary {
+            background: #4a6741;
+            color: #fff;
+            border: none;
+            padding: 6px 20px;
+            font-size: 12px;
+            cursor: pointer;
+            border-radius: 2px;
+            font-family: 'Noto Sans SC', sans-serif;
+        }
+        #evalReportModal .erp-btn-primary:hover {
+            background: #3d5636;
+        }
+        @media (min-width: 901px) {
+            #evalReportModal.erp-overlay {
+                align-items: center;
+            }
+        }
+        @media (max-width: 900px) {
+            #evalReportModal .erp-body {
+                flex-direction: column;
+            }
+            #evalReportModal .erp-left {
+                flex: 0 0 auto;
+                width: 100%;
+                max-width: none;
+                border-right: none;
+                border-bottom: 1px solid #e2ead8;
+            }
+            #evalReportModal .erp-right {
+                flex: 1 1 auto;
+                min-width: 0;
+            }
+            #evalReportModal .erp-shell {
+                max-height: min(92vh, 900px);
+            }
+        }
+    </style>
+</head>
+<body class="hr-page-body">
+    <div id="app" class="hr-page-app">
+        <!-- 加载动画 -->
+        <div id="loading" class="loading hidden">
+            <div class="spinner"></div>
+            <p>加载中...</p>
+        </div>
+
+        <!-- HR主页面 -->
+        <div id="hrDashboard" class="hr-dashboard">
+            <!-- 左侧侧边栏 -->
+            <aside class="hr-sidebar">
+                <div class="hr-sidebar-header">
+                    <div class="hr-sidebar-logo">C</div>
+                    <h1 class="hr-sidebar-title">HR评估管理</h1>
+                </div>
+                
+                <nav class="hr-sidebar-nav">
+                    <a href="#" class="hr-sidebar-item active" data-section="students">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                            <path d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                        </svg>
+                        <span>学生简历库</span>
+                    </a>
+                    <a href="#" class="hr-sidebar-item" data-section="invitations">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                            <path d="M20 4H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 4l-8 5-8-5V6l8 5 8-5v2z" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                        </svg>
+                        <span>评估邀请</span>
+                    </a>
+                    <a href="#" class="hr-sidebar-item" data-section="evaluations">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                            <path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                        </svg>
+                        <span>评估结果</span>
+                    </a>
+                </nav>
+                
+                <div class="hr-sidebar-footer">
+                    <div class="hr-sidebar-user">
+                        <div class="hr-sidebar-avatar" id="hrSidebarAvatar">HR</div>
+                        <div class="hr-sidebar-user-info">
+                            <p class="hr-sidebar-user-name" id="hrUserName"></p>
+                            <p class="hr-sidebar-company-name" id="hrCompanyName"></p>
+                        </div>
+                    </div>
+                    <button id="hrLogoutBtn" class="hr-sidebar-logout">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                            <path d="M17 7l-1.41 1.41L18.17 11H8v2h10.17l-2.58 2.58L17 17l5-5zM4 5h8V3H4c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h8v-2H4V5z" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                        </svg>
+                        <span>退出登录</span>
+                    </button>
+                </div>
+            </aside>
+
+            <!-- 主内容区域 -->
+            <main class="hr-main-content">
+                <!-- 仪表板区域 -->
+                <div id="dashboard-section" class="hr-content-section">
+                    <!-- 欢迎卡片 -->
+                    <div class="hr-welcome-card">
+                        <h2 class="hr-welcome-title">欢迎回来，<span id="hrWelcomeName"></span></h2>
+                        <p class="hr-welcome-subtitle">浏览学生简历，发起评估邀请，帮助学生更好地规划职业发展</p>
+                    </div>
+
+                    <!-- 统计数据 -->
+                    <div class="hr-stats-grid">
+                        <div class="hr-stat-card">
+                            <div class="hr-stat-value" id="totalStudents">0</div>
+                            <div class="hr-stat-label">可用学生数</div>
+                        </div>
+                        <div class="hr-stat-card">
+                            <div class="hr-stat-value" id="pendingInvitations">0</div>
+                            <div class="hr-stat-label">待确认邀请</div>
+                        </div>
+                        <div class="hr-stat-card">
+                            <div class="hr-stat-value" id="completedEvaluations">0</div>
+                            <div class="hr-stat-label">已完成评估</div>
+                        </div>
+                        <div class="hr-stat-card">
+                            <div class="hr-stat-value" id="unreadEvaluations">0</div>
+                            <div class="hr-stat-label">待评估任务</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 学生简历库区域 -->
+                <div id="students-section" class="hr-content-section">
+                    <div style="display:flex;align-items:center;gap:10px;margin-bottom:20px;">
+                        <h3 class="hr-section-title" style="margin-bottom:0;">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
+                                <path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+                                <circle cx="9" cy="7" r="4" stroke="currentColor" stroke-width="1.5"/>
+                                <path d="M23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+                            </svg>
+                            学生简历库
+                        </h3>
+                        <span id="studentStats" style="margin-left:auto;font-size:13px;color:#a0a098;"></span>
+                    </div>
+
+                    <!-- 表格容器 -->
+                    <div style="background:#fff;border:1px solid #e2dfd7;border-radius:10px;overflow:hidden;">
+
+                        <!-- 筛选工具栏嵌入表格顶部 -->
+                        <div style="display:flex;align-items:center;gap:10px;padding:10px 14px;background:#f5f3ee;border-bottom:1px solid #e2dfd7;flex-wrap:nowrap;">
+                            <span style="font-size:11px;font-weight:700;color:#a0a098;text-transform:uppercase;letter-spacing:0.5px;white-space:nowrap;">招聘岗位</span>
+                            <select id="filterJob" class="hr-select" style="height:30px;padding:0 22px 0 8px;font-size:12px;min-width:96px;max-width:120px;border:1px solid #e2dfd7;border-radius:6px;background:#fff;appearance:none;background-image:url('data:image/svg+xml,%3Csvg xmlns=''http://www.w3.org/2000/svg'' width=''10'' height=''6''%3E%3Cpath d=''M0 0l5 6 5-6z'' fill=''%23a0a098''/%3E%3C/svg%3E');background-repeat:no-repeat;background-position:right 6px center;cursor:pointer;">
+                                <option value="">全部岗位</option>
+                            </select>
+                            <div style="width:1px;height:22px;background:#e2dfd7;flex-shrink:0;"></div>
+                            <span style="font-size:11px;font-weight:700;color:#a0a098;text-transform:uppercase;letter-spacing:0.5px;white-space:nowrap;">最低匹配分</span>
+                            <select id="filterMinScore" class="hr-select" style="height:30px;padding:0 22px 0 8px;font-size:12px;min-width:72px;max-width:90px;border:1px solid #e2dfd7;border-radius:6px;background:#fff;appearance:none;background-image:url('data:image/svg+xml,%3Csvg xmlns=''http://www.w3.org/2000/svg'' width=''10'' height=''6''%3E%3Cpath d=''M0 0l5 6 5-6z'' fill=''%23a0a098''/%3E%3C/svg%3E');background-repeat:no-repeat;background-position:right 6px center;cursor:pointer;">
+                                <option value="0">不限</option>
+                                <option value="60">60分以上</option>
+                                <option value="70">70分以上</option>
+                                <option value="80">80分以上</option>
+                                <option value="90">90分以上</option>
+                            </select>
+                            <div style="width:1px;height:22px;background:#e2dfd7;flex-shrink:0;"></div>
+                            <span style="font-size:11px;font-weight:700;color:#a0a098;text-transform:uppercase;letter-spacing:0.5px;white-space:nowrap;">学历</span>
+                            <select id="filterEducation" class="hr-select" style="height:30px;padding:0 22px 0 8px;font-size:12px;min-width:64px;max-width:80px;border:1px solid #e2dfd7;border-radius:6px;background:#fff;appearance:none;background-image:url('data:image/svg+xml,%3Csvg xmlns=''http://www.w3.org/2000/svg'' width=''10'' height=''6''%3E%3Cpath d=''M0 0l5 6 5-6z'' fill=''%23a0a098''/%3E%3C/svg%3E');background-repeat:no-repeat;background-position:right 6px center;cursor:pointer;">
+                                <option value="">不限</option>
+                                <option value="本科">本科</option>
+                                <option value="硕士">硕士</option>
+                                <option value="博士">博士</option>
+                            </select>
+                            <button id="filterBtn" style="height:30px;padding:0 14px;background:#0f0f0d;color:#fff;border:none;border-radius:6px;font-size:12px;font-weight:700;cursor:pointer;white-space:nowrap;">筛选</button>
+                        </div>
+
+                        <!-- 表头 -->
+                        <table id="studentTable" style="width:100%;border-collapse:collapse;">
+                            <thead>
+                                <tr style="background:#f9f8f5;border-bottom:1px solid #e2dfd7;">
+                                    <th style="padding:9px 14px 9px 16px;text-align:left;font-size:11px;font-weight:700;color:#a0a098;text-transform:uppercase;letter-spacing:0.5px;width:44px;"></th>
+                                    <th style="padding:9px 10px;text-align:left;font-size:11px;font-weight:700;color:#a0a098;text-transform:uppercase;letter-spacing:0.5px;width:140px;">候选人</th>
+                                    <th style="padding:9px 10px;text-align:left;font-size:11px;font-weight:700;color:#a0a098;text-transform:uppercase;letter-spacing:0.5px;width:64px;">学历</th>
+                                    <th style="padding:9px 10px;text-align:left;font-size:11px;font-weight:700;color:#a0a098;text-transform:uppercase;letter-spacing:0.5px;width:88px;">专业方向</th>
+                                    <th style="padding:9px 10px;text-align:left;font-size:11px;font-weight:700;color:#a0a098;text-transform:uppercase;letter-spacing:0.5px;width:56px;">成绩</th>
+                                    <th style="padding:9px 10px;text-align:left;font-size:11px;font-weight:700;color:#a0a098;text-transform:uppercase;letter-spacing:0.5px;width:64px;">匹配度</th>
+                                    <th style="padding:9px 12px 9px 10px;text-align:right;font-size:11px;font-weight:700;color:#a0a098;text-transform:uppercase;letter-spacing:0.5px;width:180px;">操作</th>
+                                </tr>
+                            </thead>
+                            <tbody id="studentList"></tbody>
+                        </table>
+
+                        <!-- 分页栏 -->
+                        <div style="display:flex;align-items:center;padding:11px 16px;background:#f5f3ee;border-top:1px solid #e2dfd7;gap:8px;">
+                            <span id="pageTotal" style="flex:1;font-size:12px;color:#a0a098;"></span>
+                            <button id="prevPage" class="hr-view-btn" style="height:30px;padding:0 14px;font-size:12px;" disabled>上一页</button>
+                            <span id="pageInfo" style="font-size:12px;color:#a0a098;padding:0 6px;">第 1 页</span>
+                            <button id="nextPage" class="hr-view-btn" style="height:30px;padding:0 14px;font-size:12px;">下一页</button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 学生简历详情弹窗（双栏布局，沿用 resume-modal 样式，静态李明远数据） -->
+                <div id="studentModal" class="resume-detail-overlay" onclick="closeStudentModal(event)">
+                    <div class="resume-detail-modal" onclick="event.stopPropagation()">
+                        <div class="resume-modal-bar">
+                            <span class="breadcrumb">学生简历库 / <span>李明远</span></span>
+                            <button type="button" class="resume-modal-close" onclick="closeStudentModal()" aria-label="关闭">✕</button>
+                        </div>
+                        <div class="resume-modal-body">
+                            <div class="resume-col-left">
+                                <div>
+                                    <div class="resume-candidate-id">S1 · 2026-03-12</div>
+                                    <div class="resume-candidate-name">李明远</div>
+                                    <div class="resume-candidate-sub">武汉理工大学 · 计算机科学与技术<br>2023级 · 预计毕业 2027.06</div>
+                                </div>
+                                <div class="resume-score-display">
+                                    <div class="resume-score-num">95</div>
+                                    <div class="resume-score-label">综合匹配分</div>
+                                </div>
+                                <div class="resume-divider"></div>
+                                <div class="resume-meta-block">
+                                    <div class="resume-meta-row">
+                                        <span class="resume-meta-label">学历</span>
+                                        <span class="resume-meta-value">本科</span>
+                                    </div>
+                                    <div class="resume-meta-row">
+                                        <span class="resume-meta-label">GPA</span>
+                                        <span class="resume-meta-value">3.6 / 4.0</span>
+                                    </div>
+                                    <div class="resume-meta-row">
+                                        <span class="resume-meta-label">性别</span>
+                                        <span class="resume-meta-value">男</span>
+                                    </div>
+                                    <div class="resume-meta-row">
+                                        <span class="resume-meta-label">出生年月</span>
+                                        <span class="resume-meta-value">2003 / 08</span>
+                                    </div>
+                                </div>
+                                <div class="resume-divider"></div>
+                                <div class="resume-skill-section">
+                                    <div class="resume-section-title">核心技能</div>
+                                    <div class="resume-skill-grid">
+                                        <span class="resume-skill-chip highlight">机器学习</span>
+                                        <span class="resume-skill-chip highlight">深度学习</span>
+                                        <span class="resume-skill-chip highlight">Python</span>
+                                        <span class="resume-skill-chip highlight">Java</span>
+                                        <span class="resume-skill-chip">Spring Boot</span>
+                                        <span class="resume-skill-chip">Vue.js</span>
+                                        <span class="resume-skill-chip">MySQL</span>
+                                        <span class="resume-skill-chip">Linux</span>
+                                        <span class="resume-skill-chip">数据结构</span>
+                                        <span class="resume-skill-chip">算法</span>
+                                    </div>
+                                </div>
+                                <div class="resume-divider"></div>
+                                <div class="resume-contact-block">
+                                    <span>138 1234 5678</span>
+                                    <a href="mailto:liminyuan2023@whut.edu.cn">liminyuan2023@whut.edu.cn</a>
+                                </div>
+                            </div>
+                            <div class="resume-col-right">
+                                <div class="resume-section-block">
+                                    <div class="resume-sec-head"><h3>教育背景</h3></div>
+                                    <div class="resume-edu-grid" style="border:1px solid var(--rule)">
+                                        <div class="resume-edu-cell">
+                                            <div class="resume-edu-cell-label">学校</div>
+                                            <div class="resume-edu-cell-value">武汉理工大学</div>
+                                            <div class="resume-edu-cell-sub">985 / 211 重点高校</div>
+                                        </div>
+                                        <div class="resume-edu-cell">
+                                            <div class="resume-edu-cell-label">专业 · 学历</div>
+                                            <div class="resume-edu-cell-value">计算机科学与技术</div>
+                                            <div class="resume-edu-cell-sub">本科 · 2023级</div>
+                                        </div>
+                                        <div class="resume-edu-cell">
+                                            <div class="resume-edu-cell-label">绩点 · 毕业</div>
+                                            <div class="resume-edu-cell-value">GPA 3.6 / 4.0</div>
+                                            <div class="resume-edu-cell-sub">预计 2027.06 毕业</div>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="resume-section-block">
+                                    <div class="resume-sec-head"><h3>实习经历</h3></div>
+                                    <div class="resume-exp-item">
+                                        <div class="resume-exp-meta">
+                                            <div class="resume-exp-date">2024.07 — 2024.09</div>
+                                            <div class="resume-exp-org">腾讯科技</div>
+                                            <div class="resume-exp-role">后端开发实习生 · 深圳</div>
+                                        </div>
+                                        <div>
+                                            <div class="resume-exp-title">微信支付模块性能优化</div>
+                                            <div class="resume-exp-desc">参与微信支付模块性能优化，使用 Java Spring Boot 重构部分核心接口，接口响应时间降低 30%。协助完成代码审查与单元测试编写，累计提交有效 PR 12 个，获组内导师好评。</div>
+                                            <div class="resume-exp-tech">
+                                                <span class="resume-tech-tag">Java</span>
+                                                <span class="resume-tech-tag">Spring Boot</span>
+                                                <span class="resume-tech-tag">微服务</span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div class="resume-exp-item">
+                                        <div class="resume-exp-meta">
+                                            <div class="resume-exp-date">2025.03 — 2025.06</div>
+                                            <div class="resume-exp-org">字节跳动</div>
+                                            <div class="resume-exp-role">算法实习生 · 北京</div>
+                                        </div>
+                                        <div>
+                                            <div class="resume-exp-title">推荐系统召回模块优化</div>
+                                            <div class="resume-exp-desc">参与推荐系统召回模块的优化工作，使用 Python 对用户行为数据进行特征工程处理，配合团队完成离线模型训练与 A/B 实验评估。独立完成数据清洗流水线重构，处理效率提升 25%。</div>
+                                            <div class="resume-exp-tech">
+                                                <span class="resume-tech-tag">Python</span>
+                                                <span class="resume-tech-tag">特征工程</span>
+                                                <span class="resume-tech-tag">A/B Test</span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="resume-section-block">
+                                    <div class="resume-sec-head"><h3>项目经历</h3></div>
+                                    <div class="resume-exp-item">
+                                        <div class="resume-exp-meta">
+                                            <div class="resume-exp-date">2024.03 — 2024.06</div>
+                                            <div class="resume-exp-org">独立开发</div>
+                                        </div>
+                                        <div>
+                                            <div class="resume-exp-title">基于深度学习的图像识别系统</div>
+                                            <div class="resume-exp-desc">使用 CNN 卷积神经网络构建图像分类模型，在 CIFAR-10 数据集上准确率达 92%。负责模型设计、训练调优及前端展示页面开发，独立完成从数据预处理到模型部署全流程。</div>
+                                            <div class="resume-exp-tech">
+                                                <span class="resume-tech-tag">Python</span>
+                                                <span class="resume-tech-tag">PyTorch</span>
+                                                <span class="resume-tech-tag">Vue.js</span>
+                                                <span class="resume-tech-tag">Flask</span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div class="resume-exp-item">
+                                        <div class="resume-exp-meta">
+                                            <div class="resume-exp-date">2024.09 — 2024.12</div>
+                                            <div class="resume-exp-org">核心开发</div>
+                                        </div>
+                                        <div>
+                                            <div class="resume-exp-title">校园智能问答系统</div>
+                                            <div class="resume-exp-desc">基于 RAG 架构和大语言模型构建校园信息智能问答系统，使用 ChromaDB 向量数据库，集成 LangChain 框架实现多轮对话，日均查询响应时间小于 2 秒。</div>
+                                            <div class="resume-exp-tech">
+                                                <span class="resume-tech-tag">Python</span>
+                                                <span class="resume-tech-tag">LangChain</span>
+                                                <span class="resume-tech-tag">ChromaDB</span>
+                                                <span class="resume-tech-tag">FastAPI</span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div class="resume-exp-item">
+                                        <div class="resume-exp-meta">
+                                            <div class="resume-exp-date">2025.01 — 至今</div>
+                                            <div class="resume-exp-org">AI算法负责人</div>
+                                        </div>
+                                        <div>
+                                            <div class="resume-exp-title">GradQuest 职业规划智能体</div>
+                                            <div class="resume-exp-desc">参与服务外包创新创业竞赛，负责 AI 算法模块开发。基于 ReAct Agent 架构实现多工具调用与任务自动分解，集成 BGE-M3 语义嵌入模型与 ChromaDB，岗位语义匹配准确率达 90% 以上。</div>
+                                            <div class="resume-exp-tech">
+                                                <span class="resume-tech-tag">Python</span>
+                                                <span class="resume-tech-tag">LangChain</span>
+                                                <span class="resume-tech-tag">Qwen</span>
+                                                <span class="resume-tech-tag">ChromaDB</span>
+                                                <span class="resume-tech-tag">FastAPI</span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="resume-section-block">
+                                    <div class="resume-sec-head"><h3>荣誉奖项</h3></div>
+                                    <div class="resume-award-list">
+                                        <div class="resume-award-item top">
+                                            <div class="resume-award-year">2024</div>
+                                            <div class="resume-award-name">全国大学生数学建模竞赛</div>
+                                            <div class="resume-award-level amber">二等奖</div>
+                                        </div>
+                                        <div class="resume-award-item top">
+                                            <div class="resume-award-year">2023</div>
+                                            <div class="resume-award-name">武汉理工大学优秀学生奖学金</div>
+                                            <div class="resume-award-level">一等奖</div>
+                                        </div>
+                                        <div class="resume-award-item top">
+                                            <div class="resume-award-year">2024</div>
+                                            <div class="resume-award-name">计算机程序设计竞赛 · 校级</div>
+                                            <div class="resume-award-level">三等奖</div>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="resume-section-block">
+                                    <div class="resume-sec-head"><h3>证书资质</h3></div>
+                                    <div class="resume-cert-row">
+                                        <div class="resume-cert-chip">英语六级 CET-6</div>
+                                        <div class="resume-cert-chip">计算机二级 · Python</div>
+                                        <div class="resume-cert-chip">普通话二级甲等</div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="resume-modal-footer">
+                            <span class="resume-footer-status">候选人 S1 · 待处理</span>
+                            <button type="button" class="resume-btn-secondary" onclick="closeStudentModal()">关闭</button>
+                            <button type="button" class="resume-btn-primary" onclick="closeStudentModal();openInviteModal('student_001')">发起评估邀请</button>
+                        </div>
+                    </div>
+                </div>
+
+                <template id="tplResumeStudent004">
+                <div class="resume-detail-modal" onclick="event.stopPropagation()">
+                        <div class="resume-modal-bar">
+                            <span class="breadcrumb">学生简历库 / <span>林晓雨</span></span>
+                            <button type="button" class="resume-modal-close" onclick="closeStudentModal()" aria-label="关闭">✕</button>
+                        </div>
+                        <div class="resume-modal-body">
+                            <div class="resume-col-left">
+                                <div>
+                                    <div class="resume-candidate-id">S3 · 2026-03-14</div>
+                                    <div class="resume-candidate-name">林晓雨</div>
+                                    <div class="resume-candidate-sub">电子科技大学 · 人工智能<br>本科，2022级 · 预计毕业 2026.06</div>
+                                </div>
+                                <div class="resume-score-display">
+                                    <div class="resume-score-num">77</div>
+                                    <div class="resume-score-label">综合匹配分</div>
+                                </div>
+                                <div class="resume-divider"></div>
+                                <div class="resume-meta-block">
+                                    <div class="resume-meta-row">
+                                        <span class="resume-meta-label">学历</span>
+                                        <span class="resume-meta-value">本科</span>
+                                    </div>
+                                    <div class="resume-meta-row">
+                                        <span class="resume-meta-label">GPA</span>
+                                        <span class="resume-meta-value">3.2 / 4.0</span>
+                                    </div>
+                                    <div class="resume-meta-row">
+                                        <span class="resume-meta-label">性别</span>
+                                        <span class="resume-meta-value">女</span>
+                                    </div>
+                                    <div class="resume-meta-row">
+                                        <span class="resume-meta-label">出生年月</span>
+                                        <span class="resume-meta-value">2002 / 05</span>
+                                    </div>
+                                </div>
+                                <div class="resume-divider"></div>
+                                <div class="resume-skill-section">
+                                    <div class="resume-section-title">核心技能</div>
+                                    <div class="resume-skill-grid">
+                                        <span class="resume-skill-chip highlight">Python</span>
+                                        <span class="resume-skill-chip highlight">机器学习</span>
+                                        <span class="resume-skill-chip highlight">数据分析</span>
+                                    </div>
+                                </div>
+                                <div class="resume-divider"></div>
+                                <div class="resume-contact-block">
+                                    <span>182 3456 7890</span>
+                                    <a href="mailto:student004@uestc.edu.cn">student004@uestc.edu.cn</a>
+                                </div>
+                            </div>
+                            <div class="resume-col-right">
+                                <div class="resume-section-block">
+                                    <div class="resume-sec-head"><h3>教育背景</h3></div>
+                                    <div class="resume-edu-grid" style="border:1px solid var(--rule)">
+                                        <div class="resume-edu-cell">
+                                            <div class="resume-edu-cell-label">学校</div>
+                                            <div class="resume-edu-cell-value">电子科技大学</div>
+                                            <div class="resume-edu-cell-sub">985 / 211 重点高校</div>
+                                        </div>
+                                        <div class="resume-edu-cell">
+                                            <div class="resume-edu-cell-label">专业 · 学历</div>
+                                            <div class="resume-edu-cell-value">人工智能</div>
+                                            <div class="resume-edu-cell-sub">本科 · 2022级</div>
+                                        </div>
+                                        <div class="resume-edu-cell">
+                                            <div class="resume-edu-cell-label">绩点 · 毕业</div>
+                                            <div class="resume-edu-cell-value">GPA 3.2 / 4.0</div>
+                                            <div class="resume-edu-cell-sub">预计 2026.06 毕业</div>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="resume-section-block">
+                                    <div class="resume-sec-head"><h3>实习经历</h3></div>
+                                    <p class="resume-incomplete-placeholder">暂无实习经历</p>
+                                </div>
+                                <div class="resume-section-block">
+                                    <div class="resume-sec-head"><h3>项目经历</h3></div>
+                                    <div class="resume-exp-item">
+                                        <div class="resume-exp-meta">
+                                            <div class="resume-exp-date">2024.06 — 2024.12</div>
+                                            <div class="resume-exp-org">课程项目</div>
+                                            <div class="resume-exp-role">独立开发</div>
+                                        </div>
+                                        <div>
+                                            <div class="resume-exp-title">基于LSTM的股票趋势预测模型</div>
+                                            <div class="resume-exp-desc">使用PyTorch构建LSTM时序预测模型，在沪深300历史数据上训练，预测准确率达68%，完成数据清洗、特征工程与可视化展示。</div>
+                                            <div class="resume-exp-tech">
+                                                <span class="resume-tech-tag">Python</span>
+                                                <span class="resume-tech-tag">PyTorch</span>
+                                                <span class="resume-tech-tag">LSTM</span>
+                                                <span class="resume-tech-tag">数据分析</span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="resume-section-block">
+                                    <div class="resume-sec-head"><h3>荣誉奖项</h3></div>
+                                    <div class="resume-award-list">
+                                        <div class="resume-award-item top">
+                                            <div class="resume-award-year">2024</div>
+                                            <div class="resume-award-name">电子科技大学学业奖学金</div>
+                                            <div class="resume-award-level amber">二等奖</div>
+                                        </div>
+                                        <div class="resume-award-item top">
+                                            <div class="resume-award-year">2023</div>
+                                            <div class="resume-award-name">Python程序设计课程</div>
+                                            <div class="resume-award-level">满分</div>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="resume-section-block">
+                                    <div class="resume-sec-head"><h3>证书资质</h3></div>
+                                    <div class="resume-cert-row">
+                                        <div class="resume-cert-chip">英语四级 CET-4</div>
+                                        <div class="resume-cert-chip">计算机二级 · Python</div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="resume-modal-footer">
+                            <span class="resume-footer-status">候选人 S3 · 待处理</span>
+                            <button type="button" class="resume-btn-secondary" onclick="closeStudentModal()">关闭</button>
+                            <button type="button" class="resume-btn-primary" onclick="closeStudentModal();openInviteModal('student_004')">发起评估邀请</button>
+                        </div>
+                    </div>
+                </template>
+
+                <template id="tplResumeStudent005">
+                <div class="resume-detail-modal" onclick="event.stopPropagation()">
+                        <div class="resume-modal-bar">
+                            <span class="breadcrumb">学生简历库 / <span>陈雨桐</span></span>
+                            <button type="button" class="resume-modal-close" onclick="closeStudentModal()" aria-label="关闭">✕</button>
+                        </div>
+                        <div class="resume-modal-body">
+                            <div class="resume-col-left">
+                                <div>
+                                    <div class="resume-candidate-id">S4 · 2026-03-20</div>
+                                    <div class="resume-candidate-name">陈雨桐</div>
+                                    <div class="resume-candidate-sub">北京航空航天大学 · 软件工程<br>本科，2022级 · 预计毕业 2026.06</div>
+                                </div>
+                                <div class="resume-score-display">
+                                    <div class="resume-score-num">74</div>
+                                    <div class="resume-score-label">综合匹配分</div>
+                                </div>
+                                <div class="resume-divider"></div>
+                                <div class="resume-meta-block">
+                                    <div class="resume-meta-row">
+                                        <span class="resume-meta-label">学号/编号</span>
+                                        <span class="resume-meta-value">S4</span>
+                                    </div>
+                                    <div class="resume-meta-row">
+                                        <span class="resume-meta-label">学历</span>
+                                        <span class="resume-meta-value">本科</span>
+                                    </div>
+                                    <div class="resume-meta-row">
+                                        <span class="resume-meta-label">GPA</span>
+                                        <span class="resume-meta-value">2.9 / 4.0</span>
+                                    </div>
+                                    <div class="resume-meta-row">
+                                        <span class="resume-meta-label">性别</span>
+                                        <span class="resume-meta-value">女</span>
+                                    </div>
+                                    <div class="resume-meta-row">
+                                        <span class="resume-meta-label">出生年月</span>
+                                        <span class="resume-meta-value">2002 / 11</span>
+                                    </div>
+                                </div>
+                                <div class="resume-divider"></div>
+                                <div class="resume-skill-section">
+                                    <div class="resume-section-title">核心技能</div>
+                                    <div class="resume-skill-grid">
+                                        <span class="resume-skill-chip highlight">前端开发</span>
+                                        <span class="resume-skill-chip highlight">React</span>
+                                        <span class="resume-skill-chip highlight">TypeScript</span>
+                                        <span class="resume-skill-chip highlight">Node.js</span>
+                                        <span class="resume-skill-chip">UI设计</span>
+                                        <span class="resume-skill-chip">Figma</span>
+                                        <span class="resume-skill-chip">产品思维</span>
+                                    </div>
+                                </div>
+                                <div class="resume-divider"></div>
+                                <div class="resume-contact-block">
+                                    <span>187 9876 5432</span>
+                                    <a href="mailto:chenyutong2022@buaa.edu.cn">chenyutong2022@buaa.edu.cn</a>
+                                </div>
+                            </div>
+                            <div class="resume-col-right">
+                                <div class="resume-section-block">
+                                    <div class="resume-sec-head"><h3>教育背景</h3></div>
+                                    <div class="resume-edu-grid" style="border:1px solid var(--rule)">
+                                        <div class="resume-edu-cell">
+                                            <div class="resume-edu-cell-label">学校</div>
+                                            <div class="resume-edu-cell-value">北京航空航天大学</div>
+                                            <div class="resume-edu-cell-sub">985 / 211 重点高校</div>
+                                        </div>
+                                        <div class="resume-edu-cell">
+                                            <div class="resume-edu-cell-label">专业 · 学历</div>
+                                            <div class="resume-edu-cell-value">软件工程</div>
+                                            <div class="resume-edu-cell-sub">本科 · 2022级</div>
+                                        </div>
+                                        <div class="resume-edu-cell">
+                                            <div class="resume-edu-cell-label">绩点 · 毕业</div>
+                                            <div class="resume-edu-cell-value">GPA 2.9 / 4.0</div>
+                                            <div class="resume-edu-cell-sub">预计 2026.06 毕业</div>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="resume-section-block">
+                                    <div class="resume-sec-head"><h3>实习经历</h3></div>
+                                    <div class="resume-exp-item">
+                                        <div class="resume-exp-meta">
+                                            <div class="resume-exp-date">2025.06 — 2025.08</div>
+                                            <div class="resume-exp-org">字节跳动</div>
+                                            <div class="resume-exp-role">前端实习生 · 北京</div>
+                                        </div>
+                                        <div>
+                                            <div class="resume-exp-title">抖音直播间互动组件重构</div>
+                                            <div class="resume-exp-desc">参与抖音直播间互动组件的前端重构工作，使用 React + TypeScript 重写礼物动效与弹幕系统，首屏渲染时间降低 18%。协助完成组件库文档编写，提交有效 MR 共 9 个。</div>
+                                            <div class="resume-exp-tech">
+                                                <span class="resume-tech-tag">React</span>
+                                                <span class="resume-tech-tag">TypeScript</span>
+                                                <span class="resume-tech-tag">WebGL</span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div class="resume-exp-item">
+                                        <div class="resume-exp-meta">
+                                            <div class="resume-exp-date">2024.12 — 2025.03</div>
+                                            <div class="resume-exp-org">米哈游</div>
+                                            <div class="resume-exp-role">产品设计实习生 · 上海</div>
+                                        </div>
+                                        <div>
+                                            <div class="resume-exp-title">游戏内置浏览器 UI 优化</div>
+                                            <div class="resume-exp-desc">参与原神内置浏览器界面的体验优化，使用 Figma 完成 20+ 个交互原型设计，配合研发完成 A/B 测试方案制定，用户停留时长提升 11%。</div>
+                                            <div class="resume-exp-tech">
+                                                <span class="resume-tech-tag">Figma</span>
+                                                <span class="resume-tech-tag">用户研究</span>
+                                                <span class="resume-tech-tag">A/B Test</span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="resume-section-block">
+                                    <div class="resume-sec-head"><h3>项目经历</h3></div>
+                                    <div class="resume-exp-item">
+                                        <div class="resume-exp-meta">
+                                            <div class="resume-exp-date">2024.09 — 2025.01</div>
+                                            <div class="resume-exp-org">校园创业团队</div>
+                                            <div class="resume-exp-role">前端负责人</div>
+                                        </div>
+                                        <div>
+                                            <div class="resume-exp-title">校园二手交易平台「拾光集」</div>
+                                            <div class="resume-exp-desc">主导前端全栈开发，使用 Next.js + Tailwind CSS 搭建 PC 与移动端双端适配页面，接入微信小程序登录与支付宝支付，注册用户超 2000 人。</div>
+                                            <div class="resume-exp-tech">
+                                                <span class="resume-tech-tag">Next.js</span>
+                                                <span class="resume-tech-tag">Tailwind</span>
+                                                <span class="resume-tech-tag">Node.js</span>
+                                                <span class="resume-tech-tag">MySQL</span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div class="resume-exp-item">
+                                        <div class="resume-exp-meta">
+                                            <div class="resume-exp-date">2023.10 — 2024.01</div>
+                                            <div class="resume-exp-org">独立开发</div>
+                                            <div class="resume-exp-role">全栈开发者</div>
+                                        </div>
+                                        <div>
+                                            <div class="resume-exp-title">课程表可视化工具</div>
+                                            <div class="resume-exp-desc">使用 Vue 3 + Canvas 开发北航课表导入与可视化工具，支持 iCal 导出，GitHub Star 数达 430+，被多个学院学生自发分享使用。</div>
+                                            <div class="resume-exp-tech">
+                                                <span class="resume-tech-tag">Vue 3</span>
+                                                <span class="resume-tech-tag">Canvas</span>
+                                                <span class="resume-tech-tag">开源</span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="resume-section-block">
+                                    <div class="resume-sec-head"><h3>荣誉奖项</h3></div>
+                                    <div class="resume-award-list">
+                                        <div class="resume-award-item top">
+                                            <div class="resume-award-year">2024</div>
+                                            <div class="resume-award-name">中国大学生计算机设计大赛 · 华北赛区</div>
+                                            <div class="resume-award-level amber">一等奖</div>
+                                        </div>
+                                        <div class="resume-award-item top">
+                                            <div class="resume-award-year">2023</div>
+                                            <div class="resume-award-name">北京航空航天大学软件学院创新奖学金</div>
+                                            <div class="resume-award-level">获奖</div>
+                                        </div>
+                                        <div class="resume-award-item">
+                                            <div class="resume-award-year">2024</div>
+                                            <div class="resume-award-name">互联网+创新创业大赛 · 校级</div>
+                                            <div class="resume-award-level">三等奖</div>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="resume-section-block">
+                                    <div class="resume-sec-head"><h3>证书资质</h3></div>
+                                    <div class="resume-cert-row">
+                                        <div class="resume-cert-chip">英语四级 CET-4</div>
+                                        <div class="resume-cert-chip">计算机二级 · Web</div>
+                                        <div class="resume-cert-chip">普通话二级乙等</div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="resume-modal-footer">
+                            <span class="resume-footer-status">候选人 S4 · 待处理</span>
+                            <button type="button" class="resume-btn-secondary" onclick="closeStudentModal()">关闭</button>
+                            <button type="button" class="resume-btn-primary" onclick="closeStudentModal();openInviteModal('student_005')">发起评估邀请</button>
+                        </div>
+                    </div>
+                </template>
+
+                <template id="tplResumeStudent002">
+                <div class="resume-detail-modal" onclick="event.stopPropagation()">
+                        <div class="resume-privacy-banner">该学生已开启隐私保护，当前展示为匿名简历。发起评估邀请后可查看完整信息。</div>
+                        <div class="resume-modal-bar">
+                            <span class="breadcrumb">学生简历库 / <span>匿名学生</span></span>
+                            <button type="button" class="resume-modal-close" onclick="closeStudentModal()" aria-label="关闭">✕</button>
+                        </div>
+                        <div class="resume-modal-body">
+                            <div class="resume-col-left">
+                                <div>
+                                    <div class="resume-candidate-id">S2 · 2026-03-12</div>
+                                    <div class="resume-candidate-name">匿名学生</div>
+                                    <div class="resume-candidate-sub">985/211 重点高校 · 人工智能<br>硕士，2022级 · 预计毕业 2025.06</div>
+                                </div>
+                                <div class="resume-score-display">
+                                    <div class="resume-score-num">85</div>
+                                    <div class="resume-score-label">综合匹配分</div>
+                                </div>
+                                <div class="resume-divider"></div>
+                                <div class="resume-meta-block">
+                                    <div class="resume-meta-row">
+                                        <span class="resume-meta-label">学号/编号</span>
+                                        <span class="resume-meta-value">S2</span>
+                                    </div>
+                                    <div class="resume-meta-row">
+                                        <span class="resume-meta-label">学历</span>
+                                        <span class="resume-meta-value">硕士</span>
+                                    </div>
+                                    <div class="resume-meta-row">
+                                        <span class="resume-meta-label">GPA</span>
+                                        <span class="resume-meta-value">3.8 / 4.0</span>
+                                    </div>
+                                    <div class="resume-meta-row">
+                                        <span class="resume-meta-label">性别</span>
+                                        <span class="resume-meta-value">女</span>
+                                    </div>
+                                </div>
+                                <div class="resume-divider"></div>
+                                <div class="resume-skill-section">
+                                    <div class="resume-section-title">核心技能</div>
+                                    <div class="resume-skill-grid">
+                                        <span class="resume-skill-chip highlight">NLP</span>
+                                        <span class="resume-skill-chip highlight">大模型微调</span>
+                                        <span class="resume-skill-chip highlight">PyTorch</span>
+                                        <span class="resume-skill-chip highlight">Python</span>
+                                        <span class="resume-skill-chip highlight">HuggingFace</span>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="resume-col-right">
+                                <div class="resume-section-block">
+                                    <div class="resume-sec-head"><h3>教育背景</h3></div>
+                                    <div class="resume-edu-grid" style="border:1px solid var(--rule)">
+                                        <div class="resume-edu-cell">
+                                            <div class="resume-edu-cell-label">学校</div>
+                                            <div class="resume-edu-cell-value">985/211 重点高校</div>
+                                            <div class="resume-edu-cell-sub">不展示具体院校名称</div>
+                                        </div>
+                                        <div class="resume-edu-cell">
+                                            <div class="resume-edu-cell-label">专业 · 学历</div>
+                                            <div class="resume-edu-cell-value">人工智能</div>
+                                            <div class="resume-edu-cell-sub">硕士 · 2022级</div>
+                                        </div>
+                                        <div class="resume-edu-cell">
+                                            <div class="resume-edu-cell-label">绩点 · 毕业</div>
+                                            <div class="resume-edu-cell-value">GPA 3.8 / 4.0</div>
+                                            <div class="resume-edu-cell-sub">预计 2025.06 毕业</div>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="resume-section-block">
+                                    <div class="resume-sec-head"><h3>实习经历</h3></div>
+                                    <div class="resume-exp-item">
+                                        <div class="resume-exp-meta">
+                                            <div class="resume-exp-date">2024.06 — 2024.12</div>
+                                            <div class="resume-exp-org">字节跳动</div>
+                                            <div class="resume-exp-role">NLP算法实习生 · 北京</div>
+                                        </div>
+                                        <div>
+                                            <div class="resume-exp-title">项目：大模型对话安全与对齐优化</div>
+                                            <div class="resume-exp-desc">参与字节跳动对话大模型的安全对齐研究，基于RLHF框架对7B参数模型进行微调，有害内容拒绝率提升34%，同时保持回复质量无显著下降。独立完成数据清洗与标注流程搭建，构建10万条高质量SFT训练集。</div>
+                                            <div class="resume-exp-tech">
+                                                <span class="resume-tech-tag">RLHF</span>
+                                                <span class="resume-tech-tag">LLaMA</span>
+                                                <span class="resume-tech-tag">PyTorch</span>
+                                                <span class="resume-tech-tag">Python</span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="resume-section-block">
+                                    <div class="resume-sec-head"><h3>项目经历</h3></div>
+                                    <div class="resume-exp-item">
+                                        <div class="resume-exp-meta">
+                                            <div class="resume-exp-date">2023.09 — 2024.05</div>
+                                            <div class="resume-exp-org">学术研究</div>
+                                            <div class="resume-exp-role">第一作者</div>
+                                        </div>
+                                        <div>
+                                            <div class="resume-exp-title">中文医疗问答领域大模型微调与评测</div>
+                                            <div class="resume-exp-desc">基于HuggingFace Transformers对Qwen-7B进行LoRA微调，构建中文医疗QA数据集5000条，在CMedQA基准上BLEU-4提升8.2个点。论文已投稿EMNLP 2024 Workshop。</div>
+                                            <div class="resume-exp-tech">
+                                                <span class="resume-tech-tag">LoRA</span>
+                                                <span class="resume-tech-tag">Qwen</span>
+                                                <span class="resume-tech-tag">HuggingFace</span>
+                                                <span class="resume-tech-tag">NLP</span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div class="resume-exp-item">
+                                        <div class="resume-exp-meta">
+                                            <div class="resume-exp-date">2023.03 — 2023.08</div>
+                                            <div class="resume-exp-org">团队开发</div>
+                                            <div class="resume-exp-role">算法负责人</div>
+                                        </div>
+                                        <div>
+                                            <div class="resume-exp-title">多轮对话意图识别系统</div>
+                                            <div class="resume-exp-desc">设计并实现基于BERT+CRF的多轮对话意图识别系统，在校企合作项目中部署落地，意图识别准确率达91.3%，较基线提升6.8%，已支撑日均10万次查询。</div>
+                                            <div class="resume-exp-tech">
+                                                <span class="resume-tech-tag">BERT</span>
+                                                <span class="resume-tech-tag">CRF</span>
+                                                <span class="resume-tech-tag">意图识别</span>
+                                                <span class="resume-tech-tag">FastAPI</span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="resume-section-block">
+                                    <div class="resume-sec-head"><h3>荣誉奖项</h3></div>
+                                    <div class="resume-award-list">
+                                        <div class="resume-award-item top">
+                                            <div class="resume-award-year">2024</div>
+                                            <div class="resume-award-name">全国大学生计算机设计大赛</div>
+                                            <div class="resume-award-level gold">一等奖</div>
+                                        </div>
+                                        <div class="resume-award-item">
+                                            <div class="resume-award-year">2023</div>
+                                            <div class="resume-award-name">研究生国家奖学金</div>
+                                            <div class="resume-award-level">荣誉</div>
+                                        </div>
+                                        <div class="resume-award-item">
+                                            <div class="resume-award-year">2024</div>
+                                            <div class="resume-award-name">校级优秀研究生</div>
+                                            <div class="resume-award-level">荣誉</div>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="resume-section-block">
+                                    <div class="resume-sec-head"><h3>证书资质</h3></div>
+                                    <div class="resume-cert-row">
+                                        <div class="resume-cert-chip">英语六级 CET-6</div>
+                                        <div class="resume-cert-chip">计算机技术与软件资格（软件设计师）</div>
+                                        <div class="resume-cert-chip">普通话二级甲等</div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="resume-modal-footer">
+                            <span class="resume-footer-status">候选人 S2 · 待处理</span>
+                            <button type="button" class="resume-btn-secondary" onclick="closeStudentModal()">关闭</button>
+                            <button type="button" class="resume-btn-primary" onclick="closeStudentModal();openInviteModal('student_002')">发起评估邀请</button>
+                        </div>
+                    </div>
+                </template>
+
+                <template id="tplResumeStudent003Anonymous">
+                <div class="resume-detail-modal" onclick="event.stopPropagation()">
+                        <div class="resume-privacy-banner">该学生已开启隐私保护，当前展示为匿名简历。发起评估邀请后可查看完整信息。</div>
+                        <div class="resume-modal-bar">
+                            <span class="breadcrumb">学生简历库 / <span>匿名学生</span></span>
+                            <button type="button" class="resume-modal-close" onclick="closeStudentModal()" aria-label="关闭">✕</button>
+                        </div>
+                        <div class="resume-modal-body">
+                            <div class="resume-col-left">
+                                <div>
+                                    <div class="resume-candidate-id">S2 · 2026-03-12</div>
+                                    <div class="resume-candidate-name">匿名学生</div>
+                                    <div class="resume-candidate-sub">985/211 重点高校 · 计算机科学与技术<br>本科，2022级 · 预计毕业 2026.06</div>
+                                </div>
+                                <div class="resume-score-display">
+                                    <div class="resume-score-num">75</div>
+                                    <div class="resume-score-label">综合匹配分</div>
+                                </div>
+                                <div class="resume-divider"></div>
+                                <div class="resume-meta-block">
+                                    <div class="resume-meta-row">
+                                        <span class="resume-meta-label">学号/编号</span>
+                                        <span class="resume-meta-value">S2</span>
+                                    </div>
+                                    <div class="resume-meta-row">
+                                        <span class="resume-meta-label">学历</span>
+                                        <span class="resume-meta-value">本科</span>
+                                    </div>
+                                    <div class="resume-meta-row">
+                                        <span class="resume-meta-label">GPA</span>
+                                        <span class="resume-meta-value">3.4 / 4.0</span>
+                                    </div>
+                                    <div class="resume-meta-row">
+                                        <span class="resume-meta-label">性别</span>
+                                        <span class="resume-meta-value">男</span>
+                                    </div>
+                                </div>
+                                <div class="resume-divider"></div>
+                                <div class="resume-skill-section">
+                                    <div class="resume-section-title">核心技能</div>
+                                    <div class="resume-skill-grid">
+                                        <span class="resume-skill-chip highlight">数据结构</span>
+                                        <span class="resume-skill-chip highlight">算法</span>
+                                        <span class="resume-skill-chip highlight">系统设计</span>
+                                        <span class="resume-skill-chip highlight">Python</span>
+                                        <span class="resume-skill-chip highlight">Java</span>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="resume-col-right">
+                                <div class="resume-section-block">
+                                    <div class="resume-sec-head"><h3>教育背景</h3></div>
+                                    <div class="resume-edu-grid" style="border:1px solid var(--rule)">
+                                        <div class="resume-edu-cell">
+                                            <div class="resume-edu-cell-label">学校</div>
+                                            <div class="resume-edu-cell-value">985/211 重点高校</div>
+                                            <div class="resume-edu-cell-sub">不展示具体院校名称</div>
+                                        </div>
+                                        <div class="resume-edu-cell">
+                                            <div class="resume-edu-cell-label">专业 · 学历</div>
+                                            <div class="resume-edu-cell-value">计算机科学与技术</div>
+                                            <div class="resume-edu-cell-sub">本科 · 2022级</div>
+                                        </div>
+                                        <div class="resume-edu-cell">
+                                            <div class="resume-edu-cell-label">绩点 · 毕业</div>
+                                            <div class="resume-edu-cell-value">GPA 3.4 / 4.0</div>
+                                            <div class="resume-edu-cell-sub">预计 2026.06 毕业</div>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="resume-section-block">
+                                    <div class="resume-sec-head"><h3>实习经历</h3></div>
+                                    <div class="resume-exp-item">
+                                        <div class="resume-exp-meta">
+                                            <div class="resume-exp-date">2025.03 — 2025.08</div>
+                                            <div class="resume-exp-org">华为</div>
+                                            <div class="resume-exp-role">软件开发实习生 · 武汉</div>
+                                        </div>
+                                        <div>
+                                            <div class="resume-exp-title">项目：分布式存储系统性能调优</div>
+                                            <div class="resume-exp-desc">参与华为云分布式存储系统的性能调优工作，使用C++对热点数据路径进行优化，P99延迟降低22%。独立完成2个模块的单元测试覆盖，代码覆盖率从61%提升至85%。</div>
+                                            <div class="resume-exp-tech">
+                                                <span class="resume-tech-tag">C++</span>
+                                                <span class="resume-tech-tag">分布式系统</span>
+                                                <span class="resume-tech-tag">Linux</span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="resume-section-block">
+                                    <div class="resume-sec-head"><h3>项目经历</h3></div>
+                                    <div class="resume-exp-item">
+                                        <div class="resume-exp-meta">
+                                            <div class="resume-exp-date">2024.03 — 2024.09</div>
+                                            <div class="resume-exp-org">团队开发</div>
+                                            <div class="resume-exp-role">系统设计负责人</div>
+                                        </div>
+                                        <div>
+                                            <div class="resume-exp-title">轻量级KV存储引擎</div>
+                                            <div class="resume-exp-desc">基于LSM-Tree设计并实现轻量级KV存储引擎，支持WAL日志、布隆过滤器与分层压缩，随机写吞吐量达12万QPS，已在GitHub开源，Star数180+。</div>
+                                            <div class="resume-exp-tech">
+                                                <span class="resume-tech-tag">C++</span>
+                                                <span class="resume-tech-tag">LSM-Tree</span>
+                                                <span class="resume-tech-tag">算法</span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div class="resume-exp-item">
+                                        <div class="resume-exp-meta">
+                                            <div class="resume-exp-date">2023.09 — 2024.01</div>
+                                            <div class="resume-exp-org">独立开发</div>
+                                            <div class="resume-exp-role">课程实验</div>
+                                        </div>
+                                        <div>
+                                            <div class="resume-exp-title">操作系统课程实验：mini-OS</div>
+                                            <div class="resume-exp-desc">从零实现支持多进程调度、虚拟内存管理与文件系统的简易操作系统，代码量约8000行，获操作系统课程满分。</div>
+                                            <div class="resume-exp-tech">
+                                                <span class="resume-tech-tag">C</span>
+                                                <span class="resume-tech-tag">汇编</span>
+                                                <span class="resume-tech-tag">操作系统</span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="resume-section-block">
+                                    <div class="resume-sec-head"><h3>荣誉奖项</h3></div>
+                                    <div class="resume-award-list">
+                                        <div class="resume-award-item top">
+                                            <div class="resume-award-year">2024</div>
+                                            <div class="resume-award-name">ACM-ICPC 亚洲区域赛</div>
+                                            <div class="resume-award-level amber">银牌</div>
+                                        </div>
+                                        <div class="resume-award-item">
+                                            <div class="resume-award-year">2023</div>
+                                            <div class="resume-award-name">全国大学生信息安全竞赛</div>
+                                            <div class="resume-award-level">三等奖</div>
+                                        </div>
+                                        <div class="resume-award-item">
+                                            <div class="resume-award-year">2024</div>
+                                            <div class="resume-award-name">校级三好学生</div>
+                                            <div class="resume-award-level">荣誉</div>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="resume-section-block">
+                                    <div class="resume-sec-head"><h3>证书资质</h3></div>
+                                    <div class="resume-cert-row">
+                                        <div class="resume-cert-chip">英语六级 CET-6</div>
+                                        <div class="resume-cert-chip">计算机二级 · C++</div>
+                                        <div class="resume-cert-chip">普通话二级甲等</div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="resume-modal-footer">
+                            <span class="resume-footer-status">候选人 S2 · 待处理</span>
+                            <button type="button" class="resume-btn-secondary" onclick="closeStudentModal()">关闭</button>
+                            <button type="button" class="resume-btn-primary" onclick="closeStudentModal();openInviteModal('student_003')">发起评估邀请</button>
+                        </div>
+                    </div>
+                </template>
+
+                <!-- 评估邀请区域 -->
+                <div id="invitations-section" class="hr-content-section">
+                    <div style="display:flex;align-items:center;gap:10px;margin-bottom:20px;">
+                        <h3 class="hr-section-title" style="margin-bottom:0;">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
+                                <path d="M20 4H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2z" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+                                <path d="M22 6l-10 7L2 6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+                            </svg>
+                            评估邀请
+                        </h3>
+                        <span id="invitationStats" style="margin-left:auto;font-size:13px;color:#a0a098;"></span>
+                    </div>
+
+                    <div style="background:#fff;border:1px solid #e2dfd7;border-radius:10px;overflow:hidden;">
+                        <!-- 工具栏 -->
+                        <div style="display:flex;align-items:center;gap:12px;padding:11px 16px;background:#f5f3ee;border-bottom:1px solid #e2dfd7;flex-wrap:wrap;">
+                            <span style="font-size:11px;font-weight:700;color:#a0a098;text-transform:uppercase;letter-spacing:0.5px;white-space:nowrap;">状态</span>
+                            <select id="invitationStatusFilter" style="height:32px;padding:0 26px 0 9px;font-size:13px;min-width:120px;border:1px solid #e2dfd7;border-radius:6px;background:#fff;appearance:none;background-image:url('data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 width=%2710%27 height=%276%27%3E%3Cpath d=%27M0 0l5 6 5-6z%27 fill=%27%23a0a098%27/%3E%3C/svg%3E');background-repeat:no-repeat;background-position:right 8px center;cursor:pointer;color:#0f0f0d;">
+                                <option value="">全部状态</option>
+                                <option value="pending">待确认</option>
+                                <option value="accepted">已接受</option>
+                                <option value="declined">已拒绝</option>
+                            </select>
+                            <button id="loadInvitationsBtn" style="height:32px;padding:0 14px;border:1px solid #e2dfd7;background:#fff;border-radius:6px;font-size:12px;font-weight:600;color:#0f0f0d;cursor:pointer;display:flex;align-items:center;gap:5px;margin-left:auto;">
+                                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M1 4v6h6M23 20v-6h-6"/><path d="M20.49 9A9 9 0 005.64 5.64L1 10M23 14l-4.64 4.36A9 9 0 013.51 15"/></svg>
+                                刷新
+                            </button>
+                        </div>
+
+                        <!-- 表头 -->
+                        <table class="invite-table" style="width:100%;border-collapse:collapse;">
+                            <thead>
+                                <tr style="background:#f9f8f5;border-bottom:1px solid #e2dfd7;">
+                                    <th style="padding:9px 14px 9px 16px;text-align:left;font-size:11px;font-weight:700;color:#a0a098;text-transform:uppercase;letter-spacing:0.5px;">候选人</th>
+                                    <th style="padding:9px 14px;text-align:left;font-size:11px;font-weight:700;color:#a0a098;text-transform:uppercase;letter-spacing:0.5px;width:130px;">招聘岗位</th>
+                                    <th style="padding:9px 14px;text-align:left;font-size:11px;font-weight:700;color:#a0a098;text-transform:uppercase;letter-spacing:0.5px;width:150px;">发送时间</th>
+                                    <th style="padding:9px 14px;text-align:left;font-size:11px;font-weight:700;color:#a0a098;text-transform:uppercase;letter-spacing:0.5px;">邀请消息</th>
+                                    <th class="col-status" style="padding:9px 14px;text-align:left;font-size:11px;font-weight:700;color:#a0a098;text-transform:uppercase;letter-spacing:0.5px;width:90px;">状态</th>
+                                    <th class="col-action" style="padding:9px 16px 9px 14px;text-align:right;font-size:11px;font-weight:700;color:#a0a098;text-transform:uppercase;letter-spacing:0.5px;width:80px;">操作</th>
+                                </tr>
+                            </thead>
+                            <tbody id="invitationList"></tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- 评估结果区域 -->
+                <div id="evaluations-section" class="hr-content-section">
+                    <div style="display:flex;align-items:center;gap:10px;margin-bottom:20px;">
+                        <h3 class="hr-section-title" style="margin-bottom:0;">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
+                                <path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                            </svg>
+                            评估结果
+                        </h3>
+                        <span id="evaluationStats" style="margin-left:auto;font-size:13px;color:#a0a098;"></span>
+                    </div>
+
+                    <div style="background:#fff;border:1px solid #e2dfd7;border-radius:10px;overflow:hidden;">
+                        <!-- 工具栏 -->
+                        <div style="display:flex;align-items:center;gap:12px;padding:11px 16px;background:#f5f3ee;border-bottom:1px solid #e2dfd7;flex-wrap:wrap;">
+                            <span style="font-size:11px;font-weight:700;color:#a0a098;text-transform:uppercase;letter-spacing:0.5px;white-space:nowrap;">状态</span>
+                            <select id="evaluationStatusFilter" style="height:32px;padding:0 26px 0 9px;font-size:13px;min-width:120px;border:1px solid #e2dfd7;border-radius:6px;background:#fff;appearance:none;background-image:url('data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 width=%2710%27 height=%276%27%3E%3Cpath d=%27M0 0l5 6 5-6z%27 fill=%27%23a0a098%27/%3E%3C/svg%3E');background-repeat:no-repeat;background-position:right 8px center;cursor:pointer;color:#0f0f0d;">
+                                <option value="">全部状态</option>
+                                <option value="in_progress">进行中</option>
+                                <option value="completed">已完成</option>
+                            </select>
+                            <button id="loadEvaluationsBtn" style="height:32px;padding:0 14px;border:1px solid #e2dfd7;background:#fff;border-radius:6px;font-size:12px;font-weight:600;color:#0f0f0d;cursor:pointer;display:flex;align-items:center;gap:5px;margin-left:auto;">
+                                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M1 4v6h6M23 20v-6h-6"/><path d="M20.49 9A9 9 0 005.64 5.64L1 10M23 14l-4.64 4.36A9 9 0 013.51 15"/></svg>
+                                刷新
+                            </button>
+                        </div>
+
+                        <!-- 表头 -->
+                        <table style="width:100%;border-collapse:collapse;">
+                            <thead>
+                                <tr style="background:#f9f8f5;border-bottom:1px solid #e2dfd7;">
+                                    <th style="padding:9px 14px 9px 16px;text-align:left;font-size:11px;font-weight:700;color:#a0a098;text-transform:uppercase;letter-spacing:0.5px;">候选人</th>
+                                    <th style="padding:9px 14px;text-align:left;font-size:11px;font-weight:700;color:#a0a098;text-transform:uppercase;letter-spacing:0.5px;width:120px;">招聘岗位</th>
+                                    <th style="padding:9px 14px;text-align:left;font-size:11px;font-weight:700;color:#a0a098;text-transform:uppercase;letter-spacing:0.5px;width:80px;">整体印象</th>
+                                    <th style="padding:9px 14px;text-align:left;font-size:11px;font-weight:700;color:#a0a098;text-transform:uppercase;letter-spacing:0.5px;width:80px;">录用意向</th>
+                                    <th style="padding:9px 14px;text-align:left;font-size:11px;font-weight:700;color:#a0a098;text-transform:uppercase;letter-spacing:0.5px;width:90px;">状态</th>
+                                    <th style="padding:9px 16px 9px 14px;text-align:right;font-size:11px;font-weight:700;color:#a0a098;text-transform:uppercase;letter-spacing:0.5px;width:140px;">操作</th>
+                                </tr>
+                            </thead>
+                            <tbody id="evaluationList"></tbody>
+                        </table>
+
+                        <!-- 底部统计 -->
+                        <div style="display:flex;align-items:center;padding:11px 16px;background:#f5f3ee;border-top:1px solid #e2dfd7;">
+                            <span id="evaluationTotal" style="font-size:12px;color:#a0a098;"></span>
+                        </div>
+                    </div>
+                </div>
+            </main>
+        </div>
+
+        <!-- HR登录弹窗 -->
+        <div id="hrLoginModal" class="hr-login-modal hidden">
+            <div class="hr-login-modal-content">
+                <button type="button" id="hrLoginModalClose" class="hr-login-modal-close">&times;</button>
+                <div class="hr-login-modal-header">
+                    <div class="hr-register-logo">C</div>
+                    <h3 class="hr-login-modal-title">HR登录</h3>
+                    <p class="hr-login-modal-subtitle">登录以继续评估学生简历</p>
+                </div>
+                <form id="hrLoginForm">
+                    <div class="hr-form-group">
+                        <label class="hr-form-label">账号（邮箱）</label>
+                        <input type="email" id="hrLoginUsername" class="hr-form-input" placeholder="请输入邮箱" required>
+                    </div>
+                    <div class="hr-form-group">
+                        <label class="hr-form-label">密码</label>
+                        <input type="password" id="hrLoginPassword" class="hr-form-input" placeholder="请输入密码" required>
+                    </div>
+                    <button type="submit" class="hr-submit-btn" style="width: 100%; margin-top: 8px;">登录</button>
+                </form>
+                <div style="text-align: center; margin-top: 20px;">
+                    <a href="#" id="goHrRegister" class="hr-back-link">还没有账号？立即注册</a>
+                </div>
+            </div>
+        </div>
+
+        <!-- 发起评估邀请弹窗 -->
+        <div id="inviteModal" class="hr-login-modal hidden">
+            <div class="hr-login-modal-content" style="max-width: 520px;">
+                <button type="button" id="inviteModalClose" class="hr-login-modal-close">&times;</button>
+                <div class="hr-login-modal-header">
+                    <h3 class="hr-login-modal-title">发起评估邀请</h3>
+                    <p class="hr-login-modal-subtitle">向该学生发送评估邀请</p>
+                </div>
+                <form id="inviteForm">
+                    <input type="hidden" id="inviteStudentId">
+                    <div class="hr-form-group">
+                        <label class="hr-form-label">招聘岗位</label>
+                        <input type="text" id="inviteTargetJob" class="hr-form-input" placeholder="例如：算法工程师" required>
+                    </div>
+                    <div class="hr-form-group">
+                        <label class="hr-form-label">邀请信息</label>
+                        <textarea id="inviteMessage" class="hr-textarea" placeholder="请输入您想对学生说的话..." required></textarea>
+                    </div>
+                    <button type="submit" class="hr-submit-btn" style="width: 100%;">发送邀请</button>
+                </form>
+            </div>
+        </div>
+
+        <!-- 提交评估弹窗 -->
+        <div id="evaluationModal" class="hr-login-modal hidden">
+            <div class="hr-login-modal-content" style="max-width: 700px; max-height: 90vh; overflow-y: auto;">
+                <button type="button" id="evaluationModalClose" class="hr-login-modal-close">&times;</button>
+                <div class="hr-login-modal-header">
+                    <h3 class="hr-login-modal-title">提交评估结果</h3>
+                    <p class="hr-login-modal-subtitle">请完成以下评估表单</p>
+                </div>
+                <form id="evaluationForm">
+                    <input type="hidden" id="evaluationId">
+                    
+                    <div class="hr-form-group">
+                        <label class="hr-form-label">整体印象</label>
+                        <select id="overallImpression" class="hr-select" required>
+                            <option value="">请选择</option>
+                            <option value="excellent">优秀</option>
+                            <option value="good">良好</option>
+                            <option value="average">一般</option>
+                            <option value="below_average">有待提升</option>
+                        </select>
+                    </div>
+
+                    <div class="hr-form-group">
+                        <label class="hr-form-label">能力维度评分 (0-100)</label>
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+                            <div>
+                                <label style="font-size: 13px; color: #666; margin-bottom: 4px; display: block;">专业技能匹配度</label>
+                                <input type="number" id="skillMatch" class="hr-form-input" min="0" max="100" placeholder="0-100">
+                            </div>
+                            <div>
+                                <label style="font-size: 13px; color: #666; margin-bottom: 4px; display: block;">学习能力</label>
+                                <input type="number" id="learningAbility" class="hr-form-input" min="0" max="100" placeholder="0-100">
+                            </div>
+                            <div>
+                                <label style="font-size: 13px; color: #666; margin-bottom: 4px; display: block;">沟通表达</label>
+                                <input type="number" id="communication" class="hr-form-input" min="0" max="100" placeholder="0-100">
+                            </div>
+                            <div>
+                                <label style="font-size: 13px; color: #666; margin-bottom: 4px; display: block;">团队协作意愿</label>
+                                <input type="number" id="teamwork" class="hr-form-input" min="0" max="100" placeholder="0-100">
+                            </div>
+                            <div>
+                                <label style="font-size: 13px; color: #666; margin-bottom: 4px; display: block;">抗压能力</label>
+                                <input type="number" id="stressResistance" class="hr-form-input" min="0" max="100" placeholder="0-100">
+                            </div>
+                            <div>
+                                <label style="font-size: 13px; color: #666; margin-bottom: 4px; display: block;">职业成熟度</label>
+                                <input type="number" id="professionalMaturity" class="hr-form-input" min="0" max="100" placeholder="0-100">
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="hr-form-group">
+                        <label class="hr-form-label">聘用意向</label>
+                        <select id="hiringIntent" class="hr-select" required>
+                            <option value="">请选择</option>
+                            <option value="strong">强烈意向</option>
+                            <option value="moderate">有一定意向</option>
+                            <option value="weak">意向较弱</option>
+                            <option value="no">暂无意向</option>
+                        </select>
+                    </div>
+
+                    <div class="hr-form-group">
+                        <label class="hr-form-label">优点</label>
+                        <textarea id="strengthsNoted" class="hr-textarea" placeholder="请描述该学生的优点..."></textarea>
+                    </div>
+
+                    <div class="hr-form-group">
+                        <label class="hr-form-label">待提升点</label>
+                        <textarea id="weaknessesNoted" class="hr-textarea" placeholder="请描述该学生的待提升点..."></textarea>
+                    </div>
+
+                    <div class="hr-form-group">
+                        <label class="hr-form-label">推荐岗位</label>
+                        <input type="text" id="recommendedPositions" class="hr-form-input" placeholder="例如：产品助理, 数据产品经理（用逗号分隔）">
+                    </div>
+
+                    <div class="hr-form-group">
+                        <label class="hr-form-label">评估依据</label>
+                        <select id="evaluationBasis" class="hr-select" required>
+                            <option value="">请选择</option>
+                            <option value="resume_review">简历审阅</option>
+                            <option value="online_test">在线测试</option>
+                            <option value="video_interview">视频面试</option>
+                            <option value="onsite_interview">现场面试</option>
+                        </select>
+                    </div>
+
+                    <button type="submit" class="hr-submit-btn" style="width: 100%;">提交评估</button>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- HR评估报告详情弹窗 v2 -->
+    <div id="evalReportModal" class="erp-overlay" style="display:none;">
+        <div class="erp-shell">
+            <div class="erp-header">
+                <div class="erp-header-top">
+                    <div>
+                        <h2 class="erp-title">HR 评估报告</h2>
+                        <p class="erp-sub">本报告由企业 HR 基于简历审阅与能力评估生成</p>
+            </div>
+                    <button id="evalReportModalClose" type="button" class="erp-close" aria-label="关闭">✕</button>
+                </div>
+                <div class="erp-header-info">
+                    <div class="erp-info-cell">
+                        <div class="erp-info-cell-label">被选人</div>
+                        <div id="reportStudentId" class="erp-info-cell-value"></div>
+                    </div>
+                    <div class="erp-info-cell">
+                        <div class="erp-info-cell-label">招聘岗位</div>
+                        <div id="reportTargetJob" class="erp-info-cell-value erp-bold"></div>
+                    </div>
+                    <div class="erp-info-cell">
+                        <div class="erp-info-cell-label">提交时间</div>
+                        <div id="reportSubmittedAt" class="erp-info-cell-value"></div>
+                    </div>
+                    <div class="erp-info-cell">
+                        <div class="erp-info-cell-label">评估人</div>
+                        <div id="reportEvaluator" class="erp-info-cell-value"></div>
+                    </div>
+                    <div class="erp-verdict-cells">
+                        <div class="erp-verdict erp-verdict--ok">
+                            <div class="erp-verdict-label">整体印象</div>
+                            <div id="reportOverall" class="erp-verdict-val"></div>
+                        </div>
+                        <div class="erp-verdict erp-verdict--hi">
+                            <div class="erp-verdict-label">录用意向</div>
+                            <div id="reportHiring" class="erp-verdict-val"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="erp-score-strip">
+                <div>
+                    <div class="erp-avg-block">
+                        <span id="reportAvgScore" class="erp-avg-num">91.5</span>
+                        <span class="erp-avg-denom">/ 100</span>
+                    </div>
+                    <div class="erp-avg-label">综合平均分</div>
+                </div>
+                <div class="erp-score-divider"></div>
+                <div id="reportMiniScores" class="erp-mini-scores"></div>
+                <div class="erp-rank-badge">
+                    <span>候选人排名</span>
+                    <span>Top 5%</span>
+                </div>
+            </div>
+
+            <div class="erp-body">
+                <div class="erp-left">
+                    <div>
+                        <div class="erp-section-label">能力雷达图</div>
+                        <div class="erp-radar-wrap">
+                            <canvas id="reportRadarChart" width="220" height="170"></canvas>
+                </div>
+                    </div>
+                    <div>
+                        <div class="erp-section-label">优势 &amp; 待提升</div>
+                        <div class="erp-pro-con">
+                            <div class="erp-pro-box">
+                                <div class="erp-box-title"><span class="erp-box-dot"></span>优势亮点</div>
+                                <p id="reportStrengths" class="erp-box-text"></p>
+                            </div>
+                            <div class="erp-con-box">
+                                <div class="erp-box-title"><span class="erp-box-dot"></span>待提升方向</div>
+                                <p id="reportWeaknesses" class="erp-box-text"></p>
+                            </div>
+                        </div>
+                    </div>
+                    <div>
+                        <div class="erp-section-label">推荐岗位方向</div>
+                        <div id="reportPositions" class="erp-job-tags"></div>
+                </div>
+            </div>
+
+                <div class="erp-right">
+                    <div>
+                        <div class="erp-divider-label">能力维度评分</div>
+                        <div id="reportScoreBars" class="erp-bars"></div>
+                    </div>
+                    <div class="erp-timeline-section">
+                        <div class="erp-divider-label">评估时间线</div>
+                        <div class="erp-timeline-h">
+                            <div class="erp-tl-item-h">
+                                <div class="erp-tl-dot-h filled"></div>
+                                <div class="erp-tl-date-h">03-08 10:12</div>
+                                <div class="erp-tl-title-h">简历投递</div>
+                                <div class="erp-tl-desc-h">主动投递算法工程师岗位</div>
+                            </div>
+                            <div class="erp-tl-item-h">
+                                <div class="erp-tl-dot-h filled"></div>
+                                <div class="erp-tl-date-h">03-09 14:30</div>
+                                <div class="erp-tl-title-h">HR 初审</div>
+                                <div class="erp-tl-desc-h">匹配分95，标记重点候选人</div>
+                            </div>
+                            <div class="erp-tl-item-h">
+                                <div class="erp-tl-dot-h filled"></div>
+                                <div class="erp-tl-date-h">03-09 16:40</div>
+                                <div class="erp-tl-title-h">能力评估完成</div>
+                                <div class="erp-tl-desc-h">均分91.5，整体印象优秀</div>
+                            </div>
+                            <div class="erp-tl-item-h">
+                                <div class="erp-tl-dot-h pending"></div>
+                                <div class="erp-tl-date-h">待安排</div>
+                                <div class="erp-tl-title-h">面试邀请</div>
+                                <div class="erp-tl-desc-h">建议本周内完成邀约</div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="erp-ai-box">
+                        <div class="erp-ai-header">
+                            <div class="erp-ai-icon">🤖</div>
+                            <div class="erp-ai-title">AI 综合洞察</div>
+                        </div>
+                        <div id="reportInsight"></div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="erp-footer">
+                <div id="reportFooterMeta" class="erp-footer-meta"></div>
+                <div style="display:flex;gap:8px;">
+                    <button type="button" id="evalReportExportPdf" class="erp-btn-outline">导出 PDF</button>
+                    <button type="button" id="evalReportModalCloseFooter" class="erp-btn-primary">关闭报告</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="HR/hrStore.js"></script>
+    <script src="hr-app.js"></script>
+</body>
+</html>

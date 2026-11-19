@@ -1,0 +1,319 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>职业测评报告 - 打印</title>
+    <link rel="stylesheet" href="../styles.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            background: #fff;
+            color: #1a1a2e;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+            padding: 24px 16px 48px;
+            max-width: 794px;
+            margin: 0 auto;
+            min-height: 100vh;
+        }
+        .no-print {
+            margin-bottom: 20px;
+        }
+        .btn-print-pdf {
+            padding: 12px 24px;
+            background: #2C4A3E;
+            color: #fff;
+            border: none;
+            border-radius: 8px;
+            font-size: 14px;
+            cursor: pointer;
+            font-weight: 500;
+        }
+        .btn-print-pdf:hover { background: #3D6458; }
+        #reportPrintContent.loading { padding: 40px; text-align: center; color: #666; }
+        #reportPrintContent.error { padding: 40px; text-align: center; color: #c62828; }
+        /* 打印用：无阴影、A4 宽度已由 body max-width 控制 */
+        @media print {
+            body { padding: 0; background: #fff; max-width: 100%; }
+            .no-print { display: none !important; }
+            .report-header-card { box-shadow: none !important; }
+            .report-section-card, .report-summary-card, .report-chart-card { box-shadow: none !important; border: 1px solid #eee !important; }
+        }
+    </style>
+</head>
+<body>
+    <div id="printActions" class="no-print" style="display: none;">
+        <button type="button" class="btn-print-pdf" id="btnPrintPdf">导出 PDF</button>
+    </div>
+    <div id="reportPrintContent">
+        <p class="loading">加载报告中...</p>
+    </div>
+
+    <script src="../api.js"></script>
+    <script>
+(function() {
+        var params = new URLSearchParams(location.search);
+        var reportId = params.get('report_id') || params.get('id');
+        var uidFromUrl = params.get('uid');
+        var container = document.getElementById('reportPrintContent');
+        var btnPrint = document.getElementById('btnPrintPdf');
+
+        function getUserId() {
+            var uid = typeof getCurrentUserId === 'function' ? getCurrentUserId() : null;
+            return uid || (uidFromUrl ? String(uidFromUrl).trim() : null) || null;
+        }
+
+        function getCachedReport(id) {
+            try {
+                var key = 'print_report_' + (id || '');
+                var raw = sessionStorage.getItem(key);
+                if (raw) {
+                    var data = JSON.parse(raw);
+                    if (data && (data.interest_analysis || data.status === 'completed')) return data;
+                }
+            } catch (e) { /* ignore */ }
+            return null;
+        }
+
+        function setCachedReport(id, data) {
+            try {
+                if (id && data) sessionStorage.setItem('print_report_' + id, JSON.stringify(data));
+            } catch (e) { /* ignore */ }
+        }
+
+        function formatDateTime(dateString) {
+            if (!dateString) return new Date().toLocaleDateString('zh-CN', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' });
+            try {
+                var d = new Date(dateString);
+                return d.getFullYear() + '年' + String(d.getMonth() + 1).padStart(2, '0') + '月' + String(d.getDate()).padStart(2, '0') + '日 ' + String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0');
+            } catch (e) { return dateString; }
+        }
+
+        function safePct(n) {
+            var v = Number(n);
+            return (typeof v === 'number' && isFinite(v)) ? Math.max(0, Math.min(100, v)) : 0;
+        }
+        function safeAbilityScore(n) {
+            var v = Number(n);
+            return (typeof v === 'number' && isFinite(v)) ? Math.max(0, Math.min(100, v)) : 0;
+        }
+        function safeTraitScore(n) {
+            var v = Number(n);
+            return (typeof v === 'number' && isFinite(v)) ? Math.max(20, Math.min(100, v)) : 20;
+        }
+        function toNum(v) { var n = Number(v); return (typeof n === 'number' && isFinite(n)) ? n : 0; }
+
+        function renderReport(data) {
+            var interest = data.interest_analysis || {};
+            var primary = interest.primary_interest || {};
+            var dist = interest.interest_distribution || [];
+            var fields = interest.suitable_fields || [];
+            var personality = data.personality_analysis || {};
+            var mbti = personality.mbti_type || '—';
+            var traits = personality.traits || [];
+            var ability = data.ability_analysis || {};
+            var strengths = ability.strengths || [];
+            var areas = ability.areas_to_improve || [];
+            var rec = data.recommendations || {};
+            var careers = rec.suitable_careers || [];
+            var suggestions = rec.development_suggestions || [];
+            var genTime = formatDateTime(data.created_at || data.assessment_date);
+            var abilityDetail = ability.ability_detail;
+            var allAbilities;
+            if (Array.isArray(abilityDetail) && abilityDetail.length) {
+                allAbilities = abilityDetail;
+            } else {
+                var allAbilitiesRaw = (strengths || []).concat(areas || []);
+                var uniqueAbilities = [];
+                var seen = {};
+                allAbilitiesRaw.forEach(function(a) {
+                    var key = a.ability || a.name || '';
+                    if (key && !seen[key]) { seen[key] = true; uniqueAbilities.push(a); }
+                });
+                allAbilities = uniqueAbilities.length ? uniqueAbilities : allAbilitiesRaw;
+            }
+            var sortedByScore = allAbilities.slice().sort(function(a, b) { return (Number(b.score) || 0) - (Number(a.score) || 0); });
+            var topAbility = sortedByScore[0] || null;
+            var secondAbility = sortedByScore[1] || null;
+            var careerFields = (fields.length ? fields : careers.map(function(c) { return c.career; })).slice(0, 5);
+
+            var traitsHtml = '';
+            var TRAIT_MAX_SCORE = 100;
+            if (traits.length) {
+                traitsHtml = '<div class="report-section-card"><div class="report-section-title"><span class="dot"></span>性格特质分析 — ' + mbti + '</div><div class="report-trait-list">';
+                traits.forEach(function(t) {
+                    var scoreNum = safeTraitScore(t.score);
+                    var pct = safePct((scoreNum / TRAIT_MAX_SCORE) * 100);
+                    var levelClass = pct >= 60 ? 'report-level-high' : pct >= 40 ? 'report-level-mid' : 'report-level-low';
+                    var levelText = t.level || (pct >= 60 ? '偏强' : pct >= 40 ? '中等' : '偏低');
+                    traitsHtml += '<div class="report-trait-item"><span class="report-trait-name">' + (t.trait_name || '') + '</span><div class="report-trait-bar-bg"><div class="report-trait-bar" style="width:' + pct + '%; background:linear-gradient(90deg,#667eea,#764ba2)"></div></div><span class="report-trait-score">' + scoreNum + '分 <span class="report-level-tag ' + levelClass + '">' + levelText + '</span></span></div>';
+                });
+                traitsHtml += '</div></div>';
+            }
+
+            var abilityCardsHtml = '';
+            allAbilities.forEach(function(a) {
+                var score = safeAbilityScore(a.score);
+                var color = score >= 75 ? '#48bb78' : score >= 60 ? '#f5a623' : '#e94560';
+                var level = score >= 80 ? '优秀' : score >= 70 ? '良好' : score >= 60 ? '一般' : '重点提升';
+                var levelTag = score >= 70 ? 'report-level-high' : score >= 50 ? 'report-level-mid' : 'report-level-low';
+                var desc = (a.description || '').trim();
+                var sugg = Array.isArray(a.suggestions) ? a.suggestions.filter(Boolean).join(' ') : '';
+                var textBlock = desc || sugg || '可通过练习与项目实践持续提升';
+                var descHtml = textBlock ? '<div class="report-ability-desc">' + String(textBlock).replace(/</g, '&lt;') + '</div>' : '';
+                abilityCardsHtml += '<div class="report-ability-card"><div class="report-ability-name">' + (a.ability || '') + '</div><div class="report-ability-score-row"><span class="report-ability-score" style="color:' + color + '">' + score + '分</span><span class="report-level-tag ' + levelTag + '">' + level + '</span></div><div class="report-ability-bar-bg"><div class="report-ability-bar" style="width:' + score + '%; background:linear-gradient(90deg,' + color + ',' + color + '99)"></div></div>' + descHtml + '</div>';
+            });
+
+            var suggestionsHtml = '';
+            if (suggestions.length) {
+                suggestionsHtml = '<div class="report-section-card"><div class="report-section-title"><span class="dot"></span>AI 个性化发展建议</div><div class="report-suggestion-block"><span class="report-suggestion-icon">💭</span><div class="report-suggestion-text">' + suggestions.join(' ') + '</div></div></div>';
+            }
+
+            var careerChipsHtml = careerFields.map(function(name, i) {
+                return '<div class="report-career-chip"><span class="num">' + String(i + 1).padStart(2, '0') + '</span>' + name + '</div>';
+            }).join('');
+
+            container.innerHTML = '<div id="report-content" class="report-wrap">' +
+                '<div class="report-header-card"><div class="header-tag">CAREER ASSESSMENT REPORT</div><h3>' + (data.title || '职业测评报告') + '</h3><p class="header-sub">基于 Holland RIASEC × MBTI 双维度综合分析</p><div class="header-meta"><div class="meta-item"><span class="meta-label">Holland Code</span><span class="meta-value">' + (interest.holland_code || '—') + '</span></div><div class="meta-item"><span class="meta-label">MBTI 类型</span><span class="meta-value">' + mbti + '</span></div><div class="meta-item"><span class="meta-label">兴趣匹配度</span><span class="meta-value">' + (primary.score != null ? primary.score + '分' : '—') + '</span></div><div class="meta-item"><span class="meta-label">生成时间</span><span class="meta-value">' + genTime + '</span></div></div></div>' +
+                '<div class="report-summary-grid"><div class="report-summary-card c1"><div class="card-icon">✨</div><div class="card-label">主要兴趣类型</div><div class="card-value">' + (primary.type || '—') + '</div><div class="card-sub">' + ((primary.description || '').slice(0, 40)) + '</div></div><div class="report-summary-card c2"><div class="card-icon">☀️</div><div class="card-label">优势能力</div><div class="card-value">' + ((strengths[0] || topAbility) ? (strengths[0] || topAbility).ability + ' ' + safeAbilityScore((strengths[0] || topAbility).score) + '分' : '—') + '</div><div class="card-sub">' + ((strengths[1] || secondAbility) ? (strengths[1] || secondAbility).ability + ' ' + safeAbilityScore((strengths[1] || secondAbility).score) + '分' : '') + '</div></div><div class="report-summary-card c3"><div class="card-icon">🎯</div><div class="card-label">最匹配职业</div><div class="card-value">' + (careers[0] ? careers[0].career : (fields[0] || '—')) + '</div><div class="card-sub">' + (fields.slice(1, 3).join(' · ') || '') + '</div></div></div>' +
+                '<div class="report-charts-grid"><div class="report-chart-card"><div class="report-chart-title">Holland 兴趣分布</div><div class="report-chart-wrap"><canvas id="reportHollandChart"></canvas></div></div><div class="report-chart-card"><div class="report-chart-title">能力评分对比</div><div class="report-chart-wrap"><canvas id="reportAbilityBar"></canvas></div></div>' +
+                '<div class="report-section-card"><div class="report-section-title"><span class="dot"></span>综合能力图谱</div><div class="report-radar-wrap"><canvas id="reportRadarChart"></canvas></div></div>' +
+                traitsHtml +
+                '<div class="report-section-card"><div class="report-section-title"><span class="dot"></span>适合职业领域推荐</div><div class="report-career-grid">' + careerChipsHtml + '</div></div>' +
+                '<div class="report-section-card"><div class="report-section-title"><span class="dot"></span>能力详细分析</div><div class="report-ability-grid">' + abilityCardsHtml + '</div></div>' +
+                suggestionsHtml +
+                '<div class="report-footer-text">本报告由 AI 职业规划智能体生成 · 仅供参考，具体决策请结合个人实际情况</div></div>';
+
+            var hollandLabels = dist.length ? dist.map(function(d) { return d.type; }) : ['艺术型(A)', '企业型(E)', '研究型(I)', '社会型(S)', '常规型(C)', '实用型(R)'];
+            var hollandValues = (dist.length ? dist.map(function(d) { return d.score; }) : [35, 25, 20, 10, 6, 4]).map(toNum);
+            var abilityLabels = allAbilities.map(function(a) { return a.ability; });
+            var abilityValues = allAbilities.map(function(a) { return safeAbilityScore(a.score); });
+            var radarLabels = traits.map(function(t) { return t.trait_name; });
+            var radarValues = traits.map(function(t) { return safePct(safeTraitScore(t.score)); });
+            var colors = ['#e94560', '#f5a623', '#667eea', '#48bb78', '#4facfe', '#a8dadc'];
+
+            if (typeof Chart !== 'undefined') {
+                var pie = container.querySelector('#reportHollandChart');
+                if (pie && pie.getContext) {
+                    new Chart(pie.getContext('2d'), { type: 'doughnut', data: { labels: hollandLabels, datasets: [{ data: hollandValues, backgroundColor: colors.slice(0, hollandLabels.length), borderWidth: 0 }] }, options: { responsive: true, maintainAspectRatio: false, cutout: '65%', plugins: { legend: { position: 'right' } } } });
+                }
+                var bar = container.querySelector('#reportAbilityBar');
+                if (bar && bar.getContext) {
+                    new Chart(bar.getContext('2d'), { type: 'bar', data: { labels: abilityLabels, datasets: [{ label: '得分', data: abilityValues, backgroundColor: abilityValues.map(function(v) { return v >= 70 ? '#48bb78cc' : v >= 50 ? '#f5a623cc' : '#e94560cc'; }), borderRadius: 8 }] }, options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { y: { max: 100 }, x: { grid: { display: false } } } } });
+                }
+                var radar = container.querySelector('#reportRadarChart');
+                if (radar && radar.getContext && radarLabels.length > 0) {
+                    new Chart(radar.getContext('2d'), { type: 'radar', data: { labels: radarLabels, datasets: [{ label: '我的得分', data: radarValues, backgroundColor: 'rgba(233,69,96,0.18)', borderColor: '#e94560', borderWidth: 2, pointBackgroundColor: '#e94560' }, { label: '行业平均', data: radarLabels.map(function() { return 60; }), borderColor: '#667eea', borderWidth: 1.5, borderDash: [5, 5], pointRadius: 0 }] }, options: { responsive: true, maintainAspectRatio: false, scales: { r: { min: 0, max: 100 } } } });
+                }
+            }
+
+            document.getElementById('printActions').style.display = 'block';
+        }
+
+        if (!reportId) {
+            container.className = 'error';
+            container.innerHTML = '<p>缺少参数 report_id，请从报告页点击「导出 PDF」打开。</p>';
+            return;
+        }
+
+        var userId = getUserId();
+        if (!userId) {
+            container.className = 'error';
+            container.innerHTML = '<p>请先登录后再查看报告；或从报告页点击「导出 PDF」打开本页。</p>';
+            return;
+        }
+
+        function showReport(data) {
+            if (!data || data.status && data.status !== 'completed') {
+                container.className = 'error';
+                container.innerHTML = '<p>报告尚未生成完成，请稍后再试。</p>';
+                return;
+            }
+            container.classList.remove('loading');
+            container.classList.remove('error');
+            renderReport(data);
+            setCachedReport(reportId, data);
+        }
+
+        var cached = getCachedReport(reportId);
+        if (cached) {
+            showReport(cached);
+        }
+
+        function onLoadFailed(msg) {
+            if (!cached) {
+                container.className = 'error';
+                container.innerHTML = '<p>' + (msg || '加载失败，请重试') + '</p>';
+            }
+        }
+
+        getAssessmentReport(userId, reportId).then(function(result) {
+            if (result.success) {
+                showReport(result.data);
+                return;
+            }
+            if (cached) return;
+            if (typeof getCareerReport === 'function' && (String(reportId).indexOf('career') >= 0 || result.msg && (result.msg.indexOf('未找到') >= 0 || result.msg.indexOf('不存在') >= 0))) {
+                getCareerReport(userId, reportId).then(function(careerRes) {
+                    if (careerRes.success && careerRes.data) {
+                        container.classList.remove('loading');
+                        container.classList.remove('error');
+                        container.innerHTML = '<div class="report-wrap" style="padding:24px;"><p style="margin-bottom:12px;">此为职业规划报告，本打印页主要支持测评报告。</p><p>请返回报告页，使用页面内的「导出 PDF」按钮直接下载。</p><p style="margin-top:16px;"><a href="../index.html#report">返回报告页</a></p></div>';
+                        document.getElementById('printActions').style.display = 'block';
+                    } else {
+                        onLoadFailed('加载失败：' + (careerRes.msg || '请重试'));
+                    }
+                }).catch(function() { onLoadFailed('加载失败，请重试'); });
+            } else {
+                onLoadFailed('加载失败：' + (result.msg || '请重试'));
+            }
+        }).catch(function(err) {
+            onLoadFailed('加载失败，请重试');
+        });
+
+        async function exportPDF() {
+            try {
+                btnPrint.disabled = true;
+                btnPrint.textContent = '导出中...';
+
+                // 与页面一致：优先截图 reportPdfContent（导出结构与样式更贴近页面）
+                var el = document.getElementById('reportPdfContent') || document.getElementById('report-content');
+                if (!el) return;
+
+                // 单页导出：整份报告渲染为一张超长 PDF，避免任何分页分割
+                var canvas = await html2canvas(el, { scale: 2, useCORS: true, backgroundColor: '#ffffff' });
+
+                var jsPDF = window.jspdf && window.jspdf.jsPDF;
+                if (!jsPDF) { throw new Error('jsPDF 未加载'); }
+                var canvasW = canvas.width;
+                var canvasH = canvas.height;
+                var basePageWmm = 210; // A4 宽
+                var pageHmm = (canvasH * basePageWmm) / canvasW;
+                var pdf = new jsPDF({
+                    orientation: 'portrait',
+                    unit: 'mm',
+                    format: [basePageWmm, pageHmm]
+                });
+                var imgData = canvas.toDataURL('image/png');
+                pdf.addImage(imgData, 'PNG', 0, 0, basePageWmm, pageHmm);
+
+                pdf.save('职业测评报告.pdf');
+            } catch (e) {
+                console.error(e);
+                btnPrint.textContent = '导出失败，请重试';
+            } finally {
+                btnPrint.disabled = false;
+                btnPrint.textContent = '导出 PDF';
+            }
+        }
+
+        btnPrint.addEventListener('click', function() {
+            exportPDF();
+        });
+})();
+    </script>
+</body>
+</html>

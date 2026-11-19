@@ -1,0 +1,49 @@
+你是一位深耕职业规划领域的资深顾问，专门帮助大学生做精准的职业定位。
+请为【{job_name}】岗位生成一份全面的职业画像报告，要真实、具体、有参考价值。
+（岗位ID：{job_id}，类别：{category}）
+能力维度权重（可选参考）：{dim_weights}
+
+{data_section}
+
+【重要】必须且仅能使用下列 JSON 结构输出，禁止使用 basic_info、requirements 等旧版字段结构。必须包含顶层字段：job_name、industry、salary_range、demand_score、trend、trend_desc、core_skills、reality_check、entry_path、ai_summary。
+只返回JSON，不要有任何markdown代码块或额外说明。格式如下：
+
+{{
+  "job_name": "{job_name}",
+  "industry": "所属行业",
+  "salary_range": "薪资范围",
+  "demand_score": 85,
+  "trend": "上升/稳定/下降",
+  "trend_desc": "12个月内岗位增长情况一句话",
+
+  "core_skills": {{
+    "professional": ["专业技能1","专业技能2","专业技能3","专业技能4"],
+    "tools": ["工具/框架1","工具/框架2","工具/框架3","工具/框架4"],
+    "certificates": ["相关证书或学历要求，无则写空数组"],
+    "soft_skills": {{
+      "innovation": "创新能力要求描述（1-2句，如：需要独立设计算法方案，对新技术保持敏感）",
+      "learning": "学习能力要求描述（1-2句，如：AI领域迭代快，需持续跟踪论文与新框架）",
+      "pressure": "抗压能力要求描述（1-2句，如：项目周期紧，需在高强度下保证代码质量）",
+      "communication": "沟通能力要求描述（1-2句，如：需与产品、数据团队高效协作对齐需求）",
+      "internship": "实习/实践经验说明（1-2句，如：竞赛项目或实验室经历可弥补工作经验不足）"
+    }}
+  }},
+
+  "reality_check": {{
+    "pros": ["真实优势1","真实优势2","真实优势3"],
+    "cons": ["真实挑战1","真实挑战2","真实挑战3"],
+    "misconceptions": "澄清1-2个常见误解（如'不是只写代码'或'并非人人适合'）",
+    "suitable_for": "适合什么特质的人（具体描述，如：适合逻辑强、耐心钻研、对数学感兴趣的人）",
+    "not_suitable_for": "不适合什么特质的人（如：不适合追求快速出成果、不喜欢看论文的人）"
+  }},
+
+  "entry_path": {{
+    "fresh_grad": "应届生如何入行（具体建议，如：参加算法竞赛、发表论文、大厂实习三选一）",
+    "key_projects": ["入门必做项目类型1","入门必做项目类型2","入门必做项目类型3"],
+    "timeline": "从零到拿到第一份offer大概需要多久"
+  }},
+
+  "ai_summary": "200字左右的综合分析，面向大学生，真实呈现该岗位的机遇与挑战，帮助他们客观判断自己是否适合，避免盲目跟风或误判前景"
+}}
+
+请务必按上述格式输出完整JSON，填写所有字段，不要省略或留空。core_skills（含 soft_skills 的 innovation、learning、pressure、communication、internship 五项具体描述）、reality_check、entry_path、ai_summary 都必须有具体内容。
