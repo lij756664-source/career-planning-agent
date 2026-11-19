@@ -103,6 +103,9 @@ venv/
 AI算法/venv/
 backend/venv/
 
+# 本地工具元数据（不参与版本管理）
+.workbuddy/
+
 # 测评模块缓存文件
 AI算法/data/assessment/*.json
 AI算法/data/student_profiles/*.json
