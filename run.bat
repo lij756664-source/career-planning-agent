@@ -158,7 +158,13 @@ echo Starting AI service on 5002 ...
 start "GradQuest AI :5002" /D "%AI_DIR%" cmd /k "venv\Scripts\python.exe app.py"
 
 echo Starting Java backend on 5000 ...
-start "GradQuest Backend :5000" /D "%BE_DIR%" cmd /k "mvn spring-boot:run"
+rem Prefer the packaged jar: "mvn spring-boot:run" fails to find the main class
+rem when the project path contains non-ASCII characters. java -jar avoids that.
+if exist "%BE_DIR%\target\backend-1.0.0-RELEASE.jar" (
+    start "GradQuest Backend :5000" /D "%BE_DIR%" cmd /k "java -jar target\backend-1.0.0-RELEASE.jar"
+) else (
+    start "GradQuest Backend :5000" /D "%BE_DIR%" cmd /k "mvn spring-boot:run"
+)
 
 echo Starting frontend on 8080 ...
 start "GradQuest Frontend :8080" /D "%FE_DIR%" cmd /k "%VENV_PY% -m http.server 8080"
