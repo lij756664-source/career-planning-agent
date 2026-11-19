@@ -128,10 +128,10 @@ python -m venv venv
 venv\Scripts\activate          # Windows
 pip install -r requirements.txt
 
-# 密钥二选一，都不需要每次重新输入：
-#   a) 写进 ai/.env（推荐，改一行就永久生效，文件已在 .gitignore 中排除）
-#      DEEPSEEK_API_KEY=sk-xxx
-#   b) 进程内临时注入，优先级高于 .env
+# 密钥：推荐用 DPAPI 加密保存（只绑定当前 Windows 账号，项目内不留明文）
+python scripts/set_api_key.py       # 交互输入，不回显；可加 --check / --delete
+
+# 或者仅在当前进程临时注入（优先级更高）
 set DEEPSEEK_API_KEY=sk-xxx       # Windows；Linux/macOS 用 export
 set HF_ENDPOINT=https://hf-mirror.com   # 访问不了 huggingface.co 时使用（首次会下载约 95MB 向量模型）
 python app.py                  # 默认 5002，可用 AI_SERVICE_PORT 覆盖
@@ -168,7 +168,7 @@ python -m http.server 8080
 
 - **三层降级**：模型 → 规则兜底 → 空结果提示。测评、画像、匹配三条链路都做了降级，任何一层失败都不会让前端白屏。
 - **检索与生成分离**：匹配只负责算分与排序，解释文案由模型单独生成，两者可独立替换与评测。
-- **配置管理**：模型密钥不进仓库——本地持久化在 `ai/.env`（已 gitignore），环境变量 `DEEPSEEK_API_KEY` 优先级更高；后端连库口令支持 `DB_PASSWORD` 环境变量覆盖，YAML 里只保留与建库脚本一致的默认值。
+- **配置管理**：模型密钥不落明文——用 Windows DPAPI 加密后存在用户目录（`%LOCALAPPDATA%\GradQuest\`），项目里既无密钥文件也无密钥副本，换机器/换账号无法解密；环境变量 `DEEPSEEK_API_KEY` 可临时覆盖。后端连库口令支持 `DB_PASSWORD` 覆盖，YAML 里只保留与建库脚本一致的默认值。
 - **语音链路**：模拟面试的实时 ASR/TTS 依赖第三方语音服务，切到 DeepSeek 后语音入口会提示未配置，当前仅保留文字问答；语音与对话模型解耦，接回任意 ASR/TTS 服务即可。
 - **评测缺失**：匹配准确率目前没有稳定的标注集，只有人工抽样检查，这是后续最需要补的一块。
 - **并发**：当前按单机单进程设计，未做压测与限流。

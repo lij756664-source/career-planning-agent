@@ -13,12 +13,12 @@
     base_url             兼容端点，默认 https://api.deepseek.com/v1
     embedding_model_name 本地向量模型，默认 BAAI/bge-small-zh-v1.5
 密钥来源（按优先级）：
-    1. 环境变量 DEEPSEEK_API_KEY（run.bat 或系统环境变量注入）
-    2. ai/.env 文件中的 DEEPSEEK_API_KEY（本地持久化，已在 .gitignore 中排除）
+    1. 环境变量 DEEPSEEK_API_KEY（CI 或临时注入）
+    2. Windows DPAPI 加密存储（ai/scripts/set_api_key.py 写入，绑定当前 Windows 账号）
+项目里不保留任何明文密钥文件。
 """
 import os
 from abc import ABC, abstractmethod
-from pathlib import Path
 from typing import Optional
 
 from langchain_core.embeddings import Embeddings
@@ -27,29 +27,25 @@ from langchain_openai import ChatOpenAI
 
 from utils.config_handler import rag_conf
 
-# 项目根（ai/）与本地密钥文件
-AI_DIR = Path(__file__).resolve().parent.parent
-ENV_FILE = AI_DIR / ".env"
-
-# 启动时载入 ai/.env；load_dotenv 默认不覆盖已存在的环境变量，
-# 因此 run.bat 注入的 key 优先级更高，.env 只作为持久化兜底。
-if ENV_FILE.is_file():
-    try:
-        from dotenv import load_dotenv
-
-        load_dotenv(ENV_FILE)
-    except Exception:  # dotenv 未安装时静默跳过，不影响其余功能
-        pass
-
 # DeepSeek 的 OpenAI 兼容端点
 DEFAULT_BASE_URL = "https://api.deepseek.com/v1"
 DEFAULT_CHAT_MODEL = "deepseek-chat"
 DEFAULT_EMBEDDING_MODEL = "BAAI/bge-small-zh-v1.5"
 
+SECRET_NAME = "deepseek"
+
 
 def get_llm_api_key() -> str:
-    """对话模型密钥：环境变量优先，其次 ai/.env。"""
-    return (os.environ.get("DEEPSEEK_API_KEY") or "").strip()
+    """对话模型密钥：环境变量优先，其次 DPAPI 加密存储。"""
+    key = (os.environ.get("DEEPSEEK_API_KEY") or "").strip()
+    if key:
+        return key
+    try:
+        from utils.secrets import load_secret
+
+        return (load_secret(SECRET_NAME) or "").strip()
+    except Exception:
+        return ""
 
 
 def has_llm_key() -> bool:

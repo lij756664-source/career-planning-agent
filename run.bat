@@ -15,7 +15,7 @@ set "AI_DIR=%ROOT%ai"
 set "BE_DIR=%ROOT%backend"
 set "FE_DIR=%ROOT%frontend"
 set "VENV_PY=%AI_DIR%\venv\Scripts\python.exe"
-set "ENV_FILE=%AI_DIR%\.env"
+set "KEY_STORE=%LOCALAPPDATA%\GradQuest\deepseek.key"
 set "MYSQL_EXE=D:\MySQL\MySQL installation\bin\mysql.exe"
 set "PORT_CONFLICT=0"
 
@@ -107,20 +107,18 @@ if defined DEEPSEEK_API_KEY (
     echo [ OK ] DEEPSEEK_API_KEY found in environment
     goto :ports
 )
-if exist "%ENV_FILE%" (
-    findstr /r /c:"^DEEPSEEK_API_KEY=..*" "%ENV_FILE%" >nul 2>&1
-    if not errorlevel 1 (
-        echo [ OK ] key will be read from ai\.env
-        goto :ports
-    )
-)
-set /p DEEPSEEK_API_KEY=DeepSeek API key (Enter = skip, saved to ai\.env): 
-if not defined DEEPSEEK_API_KEY (
-    echo [WARN] no API key: LLM features fall back to rule-based results
+if exist "%KEY_STORE%" (
+    echo [ OK ] key loaded from encrypted store
     goto :ports
 )
->"%ENV_FILE%" echo DEEPSEEK_API_KEY=%DEEPSEEK_API_KEY%
-echo [ OK ] key saved to ai\.env, next launches skip this prompt
+echo        No API key found. The key is encrypted with Windows DPAPI
+echo        and stored outside the project folder (Enter = skip).
+"%VENV_PY%" "%AI_DIR%\scripts\set_api_key.py"
+if errorlevel 1 (
+    echo [WARN] no API key: LLM features fall back to rule-based results
+) else (
+    echo [ OK ] key saved, next launches skip this step
+)
 goto :ports
 
 rem ---------------- 4. port check ----------------
