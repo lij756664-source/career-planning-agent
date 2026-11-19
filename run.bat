@@ -187,7 +187,7 @@ rem ---------------- helpers ----------------
 set "PFREE=1"
 for /f "tokens=5" %%P in ('netstat -ano ^| findstr /r /c:":%~1 .*LISTENING"') do (
     set "PFREE=0"
-    echo [WARN] port %~1 (%~2) already in use by PID %%P
+    echo [WARN] port %~1 - %~2 - already in use by PID %%P
 )
 if "%PFREE%"=="0" set "PORT_CONFLICT=1"
 exit /b 0
