@@ -56,7 +56,7 @@
 ├── frontend/              静态页面（学生端、HR 端、报告模板）
 ├── docs/                  API 文档、启动脚本、验证工具
 ├── database.sql           建表与初始化数据
-└── start.bat              本地一键启动
+└── run.bat                本地一键启动
 ```
 
 ## 三、核心模块与实现要点
@@ -153,9 +153,11 @@ cd frontend
 python -m http.server 8080
 ```
 
-浏览器打开 `http://127.0.0.1:8080`。
+浏览器打开 `http://localhost:8080`。
 
-也可以用根目录 `start.bat` 一键拉起三个服务（需先建好 `ai/venv`）。
+请用 `localhost` 而不是 `127.0.0.1`：后端 CORS 只放行 `http://localhost:8080`。
+
+想单独重启某个服务时，用 `docs/scripts/` 下的 `start-ai.bat`、`start-backend.bat`、`start-frontend.bat`。
 
 ## 六、数据说明
 
