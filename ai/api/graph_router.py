@@ -123,23 +123,11 @@ def job_search():
 
 
 def _stream_llm(prompt: str):
-    """流式调用 qwen-plus，yield SSE data: {text: content}"""
+    """流式调用对话模型，yield SSE data: {text: content}"""
     try:
-        from dashscope import Generation
-        response = Generation.call(
-            model="qwen-plus",
-            messages=[{"role": "user", "content": prompt}],
-            result_format="message",
-            stream=True,
-        )
-        for chunk in response:
-            content = ""
-            if getattr(chunk, "output", None) and getattr(chunk.output, "choices", None):
-                choices = chunk.output.choices
-                if choices and len(choices) > 0:
-                    msg = getattr(choices[0], "message", None)
-                    if msg is not None:
-                        content = getattr(msg, "content", None) or ""
+        from model.factory import create_chat_model
+        for chunk in create_chat_model().stream(prompt):
+            content = getattr(chunk, "content", "") or ""
             if content:
                 yield f"data: {_json.dumps({'text': content}, ensure_ascii=False)}\n\n"
         yield "data: [DONE]\n\n"

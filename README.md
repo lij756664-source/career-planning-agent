@@ -30,8 +30,8 @@
                                    └────┬──────────┬──────┘
                                         │          │
                               ┌─────────▼──┐  ┌────▼─────────┐
-                              │ ChromaDB   │  │ LLM（千问）   │
-                              │ 向量检索   │  │ Embedding    │
+                              │ ChromaDB   │  │ LLM DeepSeek │
+                              │ 本地BGE向量 │  │ BGE 向量化    │
                               └────────────┘  └──────────────┘
 ```
 
@@ -92,7 +92,7 @@ BM25 / 关键词召回  ┐
 - **后端**：Spring Boot 3.3.4、Java 17、MyBatis-Plus 3.5.15、MySQL 8、JWT（jjwt 0.12）、PDFBox 3.0
 - **AI**：Flask 3.1、LangChain 1.2、LangGraph 1.0、ChromaDB、sentence-transformers、rank-bm25、pandas
 - **前端**：原生 JS（无框架）、ECharts 风格图谱模板
-- **模型**：通义千问 `qwen-plus` + `text-embedding-v4`
+- **模型**：对话走 DeepSeek `deepseek-chat`（OpenAI 兼容端点）；向量化走本地 `BAAI/bge-small-zh-v1.5`（DeepSeek 不提供 embedding 接口）
 
 ## 五、本地启动
 
@@ -116,7 +116,8 @@ python -m venv venv
 venv\Scripts\activate          # Windows
 pip install -r requirements.txt
 
-set DASHSCOPE_API_KEY=sk-xxx   # Windows；Linux/macOS 用 export
+set DEEPSEEK_API_KEY=sk-xxx       # Windows；Linux/macOS 用 export
+set HF_ENDPOINT=https://hf-mirror.com   # 访问不了 huggingface.co 时使用（首次会下载约 95MB 向量模型）
 python app.py                  # 默认 5002，可用 AI_SERVICE_PORT 覆盖
 ```
 
@@ -151,6 +152,7 @@ python -m http.server 8080
 
 - **三层降级**：模型 → 规则兜底 → 空结果提示。测评、画像、匹配三条链路都做了降级，任何一层失败都不会让前端白屏。
 - **检索与生成分离**：匹配只负责算分与排序，解释文案由模型单独生成，两者可独立替换与评测。
-- **配置管理**：敏感配置（数据库口令、模型 Key）目前直接写在 YAML 里，生产环境应改为环境变量或配置中心注入。
+- **配置管理**：模型密钥已改为环境变量注入（`DEEPSEEK_API_KEY`），不再落盘；数据库口令、加密密钥仍在 YAML 中，生产环境应一并改为外部注入。
+- **语音链路**：模拟面试的实时 ASR/TTS 依赖第三方语音服务，切到 DeepSeek 后语音入口会提示未配置，当前仅保留文字问答；语音与对话模型解耦，接回任意 ASR/TTS 服务即可。
 - **评测缺失**：匹配准确率目前没有稳定的标注集，只有人工抽样检查，这是后续最需要补的一块。
 - **并发**：当前按单机单进程设计，未做压测与限流。

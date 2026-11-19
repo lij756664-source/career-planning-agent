@@ -677,13 +677,9 @@ class AssessmentService:
         try:
             from langchain_core.output_parsers import StrOutputParser
             from langchain_core.prompts import PromptTemplate
-            try:
-                from model.factory import chat_model
-                model = chat_model
-            except ImportError:
-                from langchain_community.chat_models.tongyi import ChatTongyi
-                from utils.config_handler import rag_conf
-                model = ChatTongyi(model=rag_conf["chat_model_name"])
+            # 统一走 model.factory（DeepSeek）
+            from model.factory import chat_model
+            model = chat_model
             prompt_template = _load_prompt("ability_descriptions_prompt_path")
             prompt = PromptTemplate(input_variables=["ability_data"], template=prompt_template)
             chain = prompt | model | StrOutputParser()
@@ -718,7 +714,7 @@ class AssessmentService:
 
     def _generate_report_with_ai(self, user_id: int, assessment_id: str, answers: List[dict], scores: dict) -> dict:
         """
-        AI核心算法：调用通义大模型（qwen-plus）生成综合测评报告。
+        AI核心算法：调用大模型（DeepSeek，见 model/factory.py）生成综合测评报告。
         输入：用户档案 + 答题数据 + 计分结果
         输出：霍兰德分析 + MBTI分析 + 能力分析 + 价值观分析 + 职业建议
         """
@@ -727,13 +723,9 @@ class AssessmentService:
             from langchain_core.prompts import PromptTemplate
 
             # 模型加载（与profile_service保持一致）
-            try:
-                from model.factory import chat_model
-                model = chat_model
-            except ImportError:
-                from langchain_community.chat_models.tongyi import ChatTongyi
-                from utils.config_handler import rag_conf
-                model = ChatTongyi(model=rag_conf["chat_model_name"])
+            # 统一走 model.factory（DeepSeek）
+            from model.factory import chat_model
+            model = chat_model
 
             # 加载用户档案（如果有的话）
             try:

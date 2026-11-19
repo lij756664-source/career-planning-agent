@@ -12,7 +12,7 @@ from typing import Dict, Optional, List, Any
 
 from utils.logger_handler import logger
 from utils.path_tool import get_abs_path
-from model.factory import chat_model
+from model.factory import chat_model, has_llm_key
 
 
 # ============================================================
@@ -308,8 +308,8 @@ class AIAbilityProfileGenerator:
         logger.info(f"[AbilityProfile] 开始生成用户{user_id}的能力画像（数据源：档案）")
         
         # 如果未配置大模型 Key，则直接降级为规则画像（避免网络重试/超时导致接口长时间无响应）
-        if (self.model is None) or (not os.environ.get("DASHSCOPE_API_KEY")):
-            logger.warning("[AbilityProfile] 未检测到 DASHSCOPE_API_KEY，使用规则画像降级生成 user_id=%s", user_id)
+        if (self.model is None) or (not has_llm_key()):
+            logger.warning("[AbilityProfile] 未检测到 DEEPSEEK_API_KEY，使用规则画像降级生成 user_id=%s", user_id)
             ability_profile = self._build_rule_based_profile(user_id, profile_data)
             ability_profile = self._score_profile(ability_profile)
             ability_profile["user_id"] = user_id
@@ -360,8 +360,8 @@ class AIAbilityProfileGenerator:
         """
         logger.info(f"[AbilityProfile] 开始生成用户{user_id}的能力画像（数据源：简历）")
         
-        if (self.model is None) or (not os.environ.get("DASHSCOPE_API_KEY")):
-            logger.warning("[AbilityProfile] 未检测到 DASHSCOPE_API_KEY，简历画像生成改用规则画像降级 user_id=%s", user_id)
+        if (self.model is None) or (not has_llm_key()):
+            logger.warning("[AbilityProfile] 未检测到 DEEPSEEK_API_KEY，简历画像生成改用规则画像降级 user_id=%s", user_id)
             ability_profile = self._build_rule_based_profile(user_id, {})
             ability_profile = self._score_profile(ability_profile)
             ability_profile["user_id"] = user_id

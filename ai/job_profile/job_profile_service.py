@@ -988,13 +988,8 @@ class JobProfileService:
         return self._profiles_store or {}
 
     def _init_model(self):
-        try:
-            from model.factory import chat_model
-            return chat_model
-        except ImportError:
-            from langchain_community.chat_models.tongyi import ChatTongyi
-            from utils.config_handler import rag_conf
-            return ChatTongyi(model=rag_conf["chat_model_name"])
+        from model.factory import chat_model
+        return chat_model
 
     def _build_chain(self):
         prompt_text = _load_prompt("job_profile_prompt_path")
@@ -1074,8 +1069,9 @@ class JobProfileService:
         profile = None
         raw_output = None
         # 若未配置大模型 Key，直接使用本地兜底画像，避免异步任务长时间卡在 processing
-        if not os.environ.get("DASHSCOPE_API_KEY"):
-            logger.warning("[JobProfileService] 未检测到 DASHSCOPE_API_KEY，跳过大模型，使用本地规则兜底画像: %s (%s)", job_name, job_id)
+        from model.factory import has_llm_key
+        if not has_llm_key():
+            logger.warning("[JobProfileService] 未检测到 DEEPSEEK_API_KEY，跳过大模型，使用本地规则兜底画像: %s (%s)", job_name, job_id)
             profile = None
         else:
             try:

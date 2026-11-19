@@ -1,6 +1,6 @@
 """
 AI 生成个性化晋升路径内容
-- 使用千问 API（qwen-plus）
+- 使用 DeepSeek 对话模型（deepseek-chat，见 model/factory.py）
 - 输入：岗位名称（如 测试工程师、前端工程师）
 - 输出：4 个级别的完整发展路径 JSON
 - 批量生成 5-10 个常见岗位，保存到 data/career_paths_ai_generated.json
@@ -74,46 +74,23 @@ def _clean_markdown_json(text: str) -> str:
 
 
 def _ensure_api_key():
-    """从环境变量或 config/rag.yml 读取千问 API 密钥。"""
-    api_key = os.environ.get("DASHSCOPE_API_KEY", "").strip()
-    if api_key:
-        return
-    try:
-        import yaml
-        cfg_path = os.path.join(ROOT, "config", "rag.yml")
-        if os.path.isfile(cfg_path):
-            with open(cfg_path, "r", encoding="utf-8") as f:
-                cfg = yaml.safe_load(f)
-            if isinstance(cfg, dict):
-                key = cfg.get("api_key") or cfg.get("dashscope_api_key") or cfg.get("DASHSCOPE_API_KEY")
-                if key and isinstance(key, str) and key.strip():
-                    os.environ["DASHSCOPE_API_KEY"] = key.strip()
-    except Exception:
-        pass
+    """检查对话模型密钥（DeepSeek，见 model.factory）。"""
+    if os.environ.get("DEEPSEEK_API_KEY", "").strip():
+        return True
+    print("未设置 DEEPSEEK_API_KEY，请先设置环境变量")
+    return False
 
 
-def _call_qwen(job_name: str, model: str = "qwen-plus") -> dict | None:
-    """调用千问 API 生成单个岗位的晋升路径 JSON。"""
-    try:
-        from dashscope import Generation
-    except ImportError:
-        print("请安装 dashscope: pip install dashscope")
+def _call_llm(job_name: str, model: str = "deepseek-chat") -> dict | None:
+    """调用对话模型生成单个岗位的晋升路径 JSON。"""
+    if not _ensure_api_key():
         return None
 
-    _ensure_api_key()
-    api_key = os.environ.get("DASHSCOPE_API_KEY", "").strip()
-    if not api_key:
-        print("未设置 DASHSCOPE_API_KEY，请在环境变量或 config/rag.yml 中配置千问 API 密钥")
-        return None
+    from model.factory import create_chat_model
 
     prompt = PROMPT_TEMPLATE.format(job_name=job_name)
     try:
-        response = Generation.call(
-            model=model,
-            messages=[{"role": "user", "content": prompt}],
-            result_format="message",
-        )
-        content = (response.output.choices[0].message.content or "").strip()
+        content = (create_chat_model(model).invoke(prompt).content or "").strip()
         content = _clean_markdown_json(content)
         try:
             data = json.loads(content)
@@ -133,7 +110,7 @@ def _call_qwen(job_name: str, model: str = "qwen-plus") -> dict | None:
             return data
         return None
     except Exception as e:
-        print(f"  [ERROR] 千问调用失败: {e}")
+        print(f"  [ERROR] 模型调用失败: {e}")
         return None
 
 
@@ -161,9 +138,9 @@ def _normalize_level(level: dict, index: int) -> dict:
     return out
 
 
-def generate_one(job_name: str, model: str = "qwen-plus") -> dict | None:
+def generate_one(job_name: str, model: str = "deepseek-chat") -> dict | None:
     """为单个岗位生成晋升路径，返回 { "levels": [...] } 或 None。"""
-    data = _call_qwen(job_name, model=model)
+    data = _call_llm(job_name, model=model)
     if not data or not data.get("levels"):
         return None
     levels = []

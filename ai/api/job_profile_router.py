@@ -27,8 +27,8 @@ from utils.logger_handler import logger
 from utils.path_tool import get_abs_path
 from utils.config_handler import rag_conf
 
-# 大模型（与其它模块保持一致：通义千问 DashScope / ChatTongyi）
-from langchain_community.chat_models.tongyi import ChatTongyi
+# 大模型（与其它模块保持一致：统一从 model.factory 取 DeepSeek 客户端）
+from model.factory import create_chat_model, has_llm_key
 from langchain_core.prompts import PromptTemplate
 from langchain_core.output_parsers import StrOutputParser
 
@@ -226,10 +226,9 @@ def agent_parse_job_profile_requirement():
         try:
             # 优先尝试使用大模型解析
             # 若未配置 Key，直接跳过大模型，走本地规则解析，避免卡住导致前端超时
-            if not os.environ.get("DASHSCOPE_API_KEY"):
-                raise RuntimeError("DASHSCOPE_API_KEY 未配置")
-            model_name = (rag_conf or {}).get("chat_model_name", "qwen-plus")
-            model = ChatTongyi(model=model_name)
+            if not has_llm_key():
+                raise RuntimeError("DEEPSEEK_API_KEY 未配置")
+            model = create_chat_model((rag_conf or {}).get("chat_model_name"))
             template = PromptTemplate.from_template(
                 _JOB_AGENT_SYSTEM_PROMPT
                 + "\n\n用户输入：{user_text}\n\n只输出JSON："
@@ -574,7 +573,6 @@ def get_real_data():
 
     if not results:
         try:
-            from dashscope import Generation
             prompt = f"""为岗位【{job_name}】生成{size}条招聘信息，风格真实自然。
 只返回JSON，不要其他文字：
 {{"jobs":[
@@ -591,12 +589,7 @@ def get_real_data():
   }}
 ]}}
 请按上述格式生成{size}条，每条字段完整。"""
-            response = Generation.call(
-                model="qwen-plus",
-                messages=[{"role": "user", "content": prompt}],
-                result_format="message",
-            )
-            content = (response.output.choices[0].message.content or "").strip()
+            content = (create_chat_model().invoke(prompt).content or "").strip()
             content = content.replace("```json", "").replace("```", "").strip()
             data = json.loads(content)
             jobs = data.get("jobs", [])[:size]
@@ -1055,7 +1048,7 @@ def get_profile_by_csv_name():
 
 
 # ============================================================
-# AI 生成个性化晋升路径（优先读缓存，未命中时实时调用千问）
+# AI 生成个性化晋升路径（优先读缓存，未命中时实时调用大模型）
 # GET /api/v1/job/career-path-ai/<job_name>
 # ============================================================
 _CAREER_PATH_AI_PROMPT = '''为"{job_name}"生成职业发展路径（4个级别）。
@@ -1118,26 +1111,16 @@ def _normalize_career_path_ai_level(level, index):
     }
 
 
-def _generate_career_path_ai_with_qwen(job_name):
-    """实时调用千问生成该岗位的晋升路径，返回 { levels: [...] } 或 None"""
+def _generate_career_path_with_ai(job_name):
+    """实时调用大模型生成该岗位的晋升路径，返回 { levels: [...] } 或 None"""
     job_name = (job_name or "").strip()
     if not job_name:
         return None
-    try:
-        from dashscope import Generation
-    except ImportError:
+    if not has_llm_key():
         return None
-    model = (rag_conf or {}).get("chat_model_name", "qwen-plus")
-    if model in (None, ""):
-        model = "qwen-plus"
     prompt = _CAREER_PATH_AI_PROMPT.format(job_name=job_name)
     try:
-        response = Generation.call(
-            model=model,
-            messages=[{"role": "user", "content": prompt}],
-            result_format="message",
-        )
-        content = (response.output.choices[0].message.content or "").strip()
+        content = (create_chat_model((rag_conf or {}).get("chat_model_name")).invoke(prompt).content or "").strip()
         content = content.replace("```json", "").replace("```", "").strip()
         try:
             data = json.loads(content)
@@ -1159,7 +1142,7 @@ def _generate_career_path_ai_with_qwen(job_name):
             return None
         return {"levels": levels}
     except Exception as e:
-        logger.warning(f"[career-path-ai] 千问生成失败: {e}", exc_info=True)
+        logger.warning(f"[career-path-ai] 大模型生成失败: {e}", exc_info=True)
         return None
 
 
@@ -1168,7 +1151,7 @@ def get_career_path_ai(job_name):
     """
     获取 AI 生成的个性化晋升路径（4 级）。
     优先读缓存 data/career_paths_ai_generated.json；
-    缓存未命中时调用千问实时生成并写入缓存后返回。
+    缓存未命中时调用大模型实时生成并写入缓存后返回。
     返回: { "code": 200, "data": { "levels": [ { level, year, salary, salaryIncrease, role, badge, icon, requirements, actions, skills }, ... ] } }
     """
     job_name = (job_name or "").strip()
@@ -1185,7 +1168,7 @@ def get_career_path_ai(job_name):
                 if cache[key].get("levels"):
                     return success_response(cache[key])
         # 缓存未命中：实时生成
-        result = _generate_career_path_ai_with_qwen(job_name)
+        result = _generate_career_path_with_ai(job_name)
         if result and result.get("levels"):
             cache[job_name] = result
             _save_career_paths_ai_cache(cache)

@@ -411,24 +411,18 @@ class ProfileService:
 
     def _do_parse_resume(self, resume_text: str) -> dict:
         """
-        调用通义大模型（qwen-plus）解析简历文本，读取 config/rag.yml。
+        调用大模型（DeepSeek，见 model/factory.py）解析简历文本。
         返回：parsed_data + confidence_score + suggestions（对应API文档2.4）
         """
         from langchain_core.output_parsers import StrOutputParser
         from langchain_core.prompts import PromptTemplate
 
-        # 与 job_profile_service 保持相同的模型加载方式
-        try:
-            from model.factory import chat_model
-            model = chat_model
-        except ImportError:
-            from langchain_community.chat_models.tongyi import ChatTongyi
-            from utils.config_handler import rag_conf
-            model = ChatTongyi(model=rag_conf["chat_model_name"])
+        # 与 job_profile_service 保持相同的模型加载方式（统一由 model.factory 提供）
+        from model.factory import chat_model
+        model = chat_model
 
-        # 为避免阿里云 DashScope 的长度限制错误
-        # "<400> InternalError.Algo.InvalidParameter: Range of input length should be [1, 30720]"
-        # 这里对简历文本做长度裁剪，预留部分空间给 prompt 本身。
+        # 控制输入长度：简历全文 + prompt 容易超出模型上下文，这里做保守裁剪，
+        # 预留一部分空间给系统提示词和输出。
         clean_text = (resume_text or "").strip()
         max_chars = 25000  # 留出空间给系统提示和模板
         if len(clean_text) > max_chars:

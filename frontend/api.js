@@ -49,7 +49,7 @@ function normalizeBaseURL(url, defaultOrigin) {
 }
 
 // ==================== 大模型解析（Agent核心：自然语言 → JSON，走本地AI服务） ====================
-// 与后端其它模块保持一致：由 Flask + ChatTongyi(qwen-plus) 调通义千问，
+// 与后端其它模块保持一致：由 Flask + DeepSeek（OpenAI 兼容端点）完成解析，
 // 前端只请求本地接口 /api/v1/job/agent/parse-requirement，不直接暴露外部 API Key。
 async function agentParseJobProfileRequirement(userText) {
     if (!userText || !String(userText).trim()) {
@@ -2071,7 +2071,7 @@ async function getCareerPathDiverse(jobType) {
     }
 }
 
-// AI 生成个性化晋升路径（优先缓存，未命中时实时调用千问）
+// AI 生成个性化晋升路径（优先缓存，未命中时实时调用大模型）
 async function getCareerPathAI(jobName) {
     const base = normalizeBaseURL(API_CONFIG.jobProfilesBaseURL || API_CONFIG.assessmentBaseURL || API_CONFIG.baseURL, 'http://localhost:5002/api/v1');
     const effective = (jobName != null && String(jobName).trim() !== '') ? String(jobName).trim() : '算法工程师';

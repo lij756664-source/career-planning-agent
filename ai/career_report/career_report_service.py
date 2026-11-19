@@ -11,7 +11,6 @@ from datetime import datetime
 from typing import Any, Dict, List, Optional
 
 from langchain_core.prompts import PromptTemplate
-from langchain_community.chat_models import ChatTongyi
 from langchain_core.output_parsers import StrOutputParser
 
 from utils.logger_handler import logger
@@ -27,9 +26,9 @@ rag_conf = config.get("rag", {})
 # 模型调用
 # ===================================================
 def get_chat_model():
-    """获取通义大模型实例"""
-    model_name = rag_conf.get("chat_model_name", "qwen-plus")
-    return ChatTongyi(model=model_name)
+    """获取对话模型实例（统一由 model.factory 创建，DeepSeek）"""
+    from model.factory import create_chat_model
+    return create_chat_model(rag_conf.get("chat_model_name"))
 
 # 缓存模型实例
 _chat_model = None

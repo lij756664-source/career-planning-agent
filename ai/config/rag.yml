@@ -1,4 +1,6 @@
 #key: value
-chat_model_name: qwen-plus
-embedding_model_name: text-embedding-v4
-api_key: sk-0485e7bf81264263966468a975580d75
+# 对话模型：DeepSeek（OpenAI 兼容端点）。密钥请用环境变量 DEEPSEEK_API_KEY，不要写在这里。
+chat_model_name: deepseek-chat
+base_url: https://api.deepseek.com/v1
+# 向量模型：DeepSeek 不提供 embedding，改用本地 sentence-transformers 模型（首次运行会自动下载）
+embedding_model_name: BAAI/bge-small-zh-v1.5
