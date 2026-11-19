@@ -118,6 +118,10 @@ python -m venv venv
 venv\Scripts\activate          # Windows
 pip install -r requirements.txt
 
+# 密钥二选一，都不需要每次重新输入：
+#   a) 写进 ai/.env（推荐，改一行就永久生效，文件已在 .gitignore 中排除）
+#      DEEPSEEK_API_KEY=sk-xxx
+#   b) 进程内临时注入，优先级高于 .env
 set DEEPSEEK_API_KEY=sk-xxx       # Windows；Linux/macOS 用 export
 set HF_ENDPOINT=https://hf-mirror.com   # 访问不了 huggingface.co 时使用（首次会下载约 95MB 向量模型）
 python app.py                  # 默认 5002，可用 AI_SERVICE_PORT 覆盖
@@ -154,7 +158,7 @@ python -m http.server 8080
 
 - **三层降级**：模型 → 规则兜底 → 空结果提示。测评、画像、匹配三条链路都做了降级，任何一层失败都不会让前端白屏。
 - **检索与生成分离**：匹配只负责算分与排序，解释文案由模型单独生成，两者可独立替换与评测。
-- **配置管理**：模型密钥已改为环境变量注入（`DEEPSEEK_API_KEY`），不再落盘；数据库口令、加密密钥仍在 YAML 中，生产环境应一并改为外部注入。
+- **配置管理**：模型密钥不进仓库——本地持久化在 `ai/.env`（已 gitignore），环境变量 `DEEPSEEK_API_KEY` 优先级更高；数据库口令、加密密钥仍在 YAML 中，生产环境应一并改为外部注入。
 - **语音链路**：模拟面试的实时 ASR/TTS 依赖第三方语音服务，切到 DeepSeek 后语音入口会提示未配置，当前仅保留文字问答；语音与对话模型解耦，接回任意 ASR/TTS 服务即可。
 - **评测缺失**：匹配准确率目前没有稳定的标注集，只有人工抽样检查，这是后续最需要补的一块。
 - **并发**：当前按单机单进程设计，未做压测与限流。

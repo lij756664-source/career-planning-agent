@@ -15,7 +15,7 @@ set "AI_DIR=%ROOT%ai"
 set "BE_DIR=%ROOT%backend"
 set "FE_DIR=%ROOT%frontend"
 set "VENV_PY=%AI_DIR%\venv\Scripts\python.exe"
-set "KEY_FILE=%ROOT%deepseek_key.txt"
+set "ENV_FILE=%AI_DIR%\.env"
 set "MYSQL_EXE=D:\MySQL\MySQL installation\bin\mysql.exe"
 set "PORT_CONFLICT=0"
 
@@ -88,19 +88,25 @@ if errorlevel 1 (
 rem ---------------- 3. api key ----------------
 :check_key
 echo.
-if defined DEEPSEEK_API_KEY goto :key_ok
-if exist "%KEY_FILE%" set /p DEEPSEEK_API_KEY=<"%KEY_FILE%"
-if not defined DEEPSEEK_API_KEY set /p DEEPSEEK_API_KEY=DeepSeek API key (Enter = skip): 
 if defined DEEPSEEK_API_KEY (
-    >"%KEY_FILE%" <nul set /p =%DEEPSEEK_API_KEY%
-    echo [ OK ] key set and cached in deepseek_key.txt
-) else (
-    echo [WARN] no API key: LLM features fall back to rule-based results
+    echo [ OK ] DEEPSEEK_API_KEY found in environment
+    goto :ports
 )
+if exist "%ENV_FILE%" (
+    findstr /r /c:"^DEEPSEEK_API_KEY=..*" "%ENV_FILE%" >nul 2>&1
+    if not errorlevel 1 (
+        echo [ OK ] key will be read from ai\.env
+        goto :ports
+    )
+)
+set /p DEEPSEEK_API_KEY=DeepSeek API key (Enter = skip, saved to ai\.env): 
+if not defined DEEPSEEK_API_KEY (
+    echo [WARN] no API key: LLM features fall back to rule-based results
+    goto :ports
+)
+>"%ENV_FILE%" echo DEEPSEEK_API_KEY=%DEEPSEEK_API_KEY%
+echo [ OK ] key saved to ai\.env, next launches skip this prompt
 goto :ports
-
-:key_ok
-echo [ OK ] DEEPSEEK_API_KEY found in environment
 
 rem ---------------- 4. port check ----------------
 :ports
