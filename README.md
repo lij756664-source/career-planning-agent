@@ -100,13 +100,15 @@ BM25 / 关键词召回  ┐
 
 最省事的方式是双击根目录 `run.bat`：它会检查数据库、按需创建 venv 并装依赖、询问 DeepSeek Key、检测端口占用，然后把三个服务分别开到独立窗口并打开浏览器。下面是等价的手动步骤。
 
-数据库只在首次初始化时需要 MySQL root 密码。想免输入的话，在根目录建一个 `local.env`（已 gitignore，不会提交）：
+数据库只在首次初始化时需要 MySQL root 密码，脚本不会把它写到任何文件里：没有现成凭据时由 `mysql` 自行提示输入。
+
+如果希望以后重建库也免输入，用 MySQL 自带的加密登录路径（凭据存在用户目录的 `.mylogin.cnf`，项目里没有明文）：
 
 ```
-MYSQL_ROOT_PASSWORD=你的root密码
+"D:\MySQL\MySQL installation\bin\mysql_config_editor.exe" set --login-path=gradquest-root --host=127.0.0.1 --user=root --password
 ```
 
-`run.bat` 会自动读取；也可以在里面放 `DB_PASSWORD=` 覆盖后端连库口令。
+下次 `run.bat` 会优先使用 `gradquest-root` 这条登录路径。
 
 **1. 初始化数据库**
 

@@ -25,14 +25,6 @@ echo ==========================================================
 echo   Project: %ROOT%
 echo.
 
-rem ---------------- 0. local overrides ----------------
-rem local.env is git-ignored; it can hold MYSQL_ROOT_PASSWORD and DB_PASSWORD.
-if exist "%ROOT%local.env" (
-    for /f "usebackq tokens=1,* delims==" %%A in (`findstr /v /b "#" "%ROOT%local.env"`) do (
-        if not "%%A"=="" set "%%A=%%B"
-    )
-)
-
 rem ---------------- 1. database ----------------
 if not exist "%MYSQL_EXE%" (
     where mysql >nul 2>&1
@@ -50,23 +42,34 @@ if not errorlevel 1 (
 )
 
 echo [FAIL] MySQL: database "gradquest" is not ready.
-echo        One-time setup:
-echo          "%MYSQL_EXE%" -u root -p ^< database.sql
 echo.
-set "ROOTPW="
-if defined MYSQL_ROOT_PASSWORD (
-    set "ROOTPW=%MYSQL_ROOT_PASSWORD%"
-    echo [ OK ] using root password from local.env
+
+rem Prefer the encrypted login-path saved by mysql_config_editor: no plaintext
+rem password on disk, none on the command line.
+"%MYSQL_EXE%" --login-path=gradquest-root -e "select 1" >nul 2>&1
+if not errorlevel 1 (
+    echo [ OK ] using saved login-path gradquest-root
+    pushd "%ROOT%"
+    "%MYSQL_EXE%" --login-path=gradquest-root < database.sql
+    if errorlevel 1 (
+        echo [FAIL] import failed.
+    ) else (
+        echo [ OK ] database.sql imported
+    )
+    popd
+    goto :check_python
 )
-if "%ROOTPW%"=="" set /p ROOTPW=MySQL root password (Enter = skip and continue): 
-if "%ROOTPW%"=="" goto :check_python
+
+echo        Importing schema with the MySQL root account.
+echo        mysql will ask for the password (blank = skip import).
 pushd "%ROOT%"
-"%MYSQL_EXE%" -u root -p%ROOTPW% < database.sql
+"%MYSQL_EXE%" -u root -p < database.sql
 if errorlevel 1 (
-    echo [FAIL] import failed, check the password.
+    echo [FAIL] import skipped or wrong password, continuing without import.
 ) else (
     echo [ OK ] database.sql imported
 )
+popd
 popd
 
 rem ---------------- 2. python env ----------------
